@@ -141,7 +141,6 @@ class BasicTransformer(LP_Transformer):
         #      Positive Comp.     - Negative Comp.
         return x[:originalNumVar] - x[originalNumVar:2*originalNumVar]
 
-
 class BoundShiftingTransformer(LP_Transformer):
     """
     This transformer builds upon the same underlying logic as the BasicTransformer but takes advantage of the fact that any variable with a lower or upper bound can be shifted or flipped to get it to align will with standard form without the need for explicit variables for the positive and negative components:
@@ -203,3 +202,77 @@ class SimplifyingTransformer(LP_Transformer):
     Where c' = V^T c, A' = U S, THIS MIGHT NOT WORK.
     """
     pass
+
+class RepetitiveEqualityTransformer(LP_Transformer):
+    """
+    This transformer works by replacing all equality constraints (A x = b) with two inequality constraints (Ax <= b and -Ax <= -b) and then merging all inequality constraints into one large A_leq, b_leq system.
+
+    Thus this transformer takes in an lp of general form:
+
+    min c^T x
+    s.t. A_eq x == b_eq
+         A_leq x <= b_leq
+         lb <= x <= ub
+
+    and transforms it into an lp of the following form (also referred to as "dual standard form"):
+
+    min c^T x
+    s.t. A_leq x <= b_leq
+
+    Mathematically speaking, here is the matrix representation of this transformed A_leq x <= b_leq system in terms of the original A_eq, b_eq, A_leq, b_leq, lb, ub values:
+
+    min c^T x
+
+    s.t. ┌─     ─┐┌─ ─┐    ┌─     ─┐
+         │┌─   ─┐││   │    │┌─   ─┐│
+         │ A_leq ││   │    │ b_leq │
+         │└─   ─┘││   │    │└─   ─┘│
+         │┌─   ─┐││   │    │┌─   ─┐│
+         │ A_eq  ││   │    │ b_eq  │
+         │└─   ─┘││   │    │└─   ─┘│
+         │┌─   ─┐││   │    │┌─   ─┐│
+         │ -A_eq ││ x │ <= │ -b_eq │
+         │└─   ─┘││   │    │└─   ─┘│
+         │┌─   ─┐││   │    │┌─   ─┐│
+         │   I'  ││   │    │  lb'  │
+         │└─   ─┘││   │    │└─   ─┘│
+         │┌─   ─┐││   │    │┌─   ─┐│
+         │  -I'' ││   │    │ -ub'' │
+         │└─   ─┘││   │    │└─   ─┘│
+         └─     ─┘└─ ─┘    └─     ─┘
+
+    Where I' and lb' are the identity matrix and lb vector with rows corresponding to "nan" lb values removed. Likewise I'' and ub'' are the identity matrix and ub vector with rows corresponding to "nan" ub values removed.
+    """ 
+    def Transform(self):
+        #First, let's define I', lb', I'' and ub''
+        lbNonNanIndices = np.where(~np.isnan(self.originalLP.lb))[0]
+        ubNonNanIndices = np.where(~np.isnan(self.originalLP.ub))[0]
+
+        lbp = self.originalLP.lb[lbNonNanIndices]
+        ubpp = self.originalLP.ub[ubNonNanIndices]
+
+        Ip = csr_matrix((np.ones(len(lbNonNanIndices)), (np.arange(len(lbNonNanIndices)),lbNonNanIndices)),shape=(len(lbNonNanIndices),len(self.originalLP.c)))
+
+        Ipp = csr_matrix((np.ones(len(ubNonNanIndices)), (np.arange(len(ubNonNanIndices)),ubNonNanIndices)),shape=(len(ubNonNanIndices),len(self.originalLP.c)))
+
+        #Now lets assemble the new A_leq and b_leq components
+        A_leq = vstack([
+            self.originalLP.A_leq,
+            self.originalLP.A_eq,
+            -self.originalLP.A_eq,
+            Ip,
+            -Ipp
+        ])
+        b_leq = np.hstack([self.originalLP.b_leq,self.originalLP.b_eq,-self.originalLP.b_eq,lbp,-ubpp])
+
+        self.transformedLP = LP(c=self.originalLP.c,A_leq=A_leq,b_leq=b_leq)
+        return self.transformedLP
+    
+    def UnTransform(self, x):
+        """
+        Since no transformations are done to the space of x variables. The transformation for this transformer will be simply "x".
+        """
+        return x
+
+
+

@@ -1,4 +1,5 @@
-from LinearSolver import SimplexSolver, TerminationCondition
+from LinearSolver import SimplexSolver
+from TerminationCondition import TerminationCondition
 from LP import LP
 from LP_Transformer import BasicTransformer
 

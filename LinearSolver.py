@@ -1,27 +1,22 @@
 from scipy.sparse import csr_matrix, identity, hstack, vstack
-from scipy.sparse.linalg import splu
-from scipy.sparse.linalg import spsolve_triangular
+from scipy.sparse.linalg import splu, spsolve_triangular, spsolve
 
 
 import numpy as np
 from abc import ABC,abstractmethod
 from warnings import warn
-from enum import Enum
 import time
 import logging
 
 from LP import LP
 
-class TerminationCondition(Enum):
-    OPTIMAL = 1
-    INFEASIBLE = 2
-    UNBOUNDED = 3
-    ITR_LIMIT = 4
-    TIME_LIMIT = 5
+from TerminationCondition import TerminationCondition
 
-class SolverResult:
-    def __init__(self,solution=None,obj=None,terminationCondition=None,numItr=None,solveTime=None):
+
+class LinearSolverResult:
+    def __init__(self,solution=None,basis=None,obj=None,terminationCondition=None,numItr=None,solveTime=None):
         self.solution = solution
+        self.basis = basis
         self.obj = obj
         self.terminationCondition = terminationCondition
         self.numItr = numItr
@@ -30,36 +25,38 @@ class SolverResult:
     def __repr__(self):
         term = str(self.terminationCondition).replace("TerminationCondition.","")
         return f"~~~ SOLVER RESULT~~~\nOptimal Objective Function Value: {self.obj:.5e}\nTermination Condition: {term}\nNumber of Iterations: {self.numItr}\nSolve Time: {self.solveTime:.2f} seconds"
-
+        
 
 class LinearSolver(ABC):
     """
     An abstract base class for all linear solvers.
     """
-    def __init__(self,logFile=None,logLevel=logging.WARNING):
-        self.logger = logging.getLogger()
-        self.logger.setLevel(logLevel)
+    def __init__(self,logFile=None,logLevel=logging.WARNING,logger:logging.Logger=None,logSparseFormat:bool=True):
+        if logger is None:
+            self.logger = logging.getLogger("LINEAR_SOLVER")
+            self.logger.setLevel(logLevel)
 
-        if logFile is not None:
-            file_handler = logging.FileHandler(logFile)
-            file_handler.setLevel(logLevel)  # Set the desired log level for the file
+            if logFile is not None:
+                file_handler = logging.FileHandler(logFile)
+                file_handler.setLevel(logLevel)  # Set the desired log level for the file
 
-            # Create a logging format
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            file_handler.setFormatter(formatter)
+                # Create a logging format
+                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                file_handler.setFormatter(formatter)
 
-            # Add the file handler to the logger
-            self.logger.addHandler(file_handler)
+                # Add the file handler to the logger
+                self.logger.addHandler(file_handler)
+        else:
+            self.logger = logger
+
+        self.logSparseFormat = logSparseFormat
 
         np.set_printoptions(threshold=np.inf)
 
-
-
-
     @abstractmethod
-    def Solve(self,lp:LP)-> tuple:
+    def Solve(self,lp:LP)-> LinearSolverResult:
         """
-        A function that takes in an lp and returns a SolverResult object
+        A function that takes in an lp and returns a LinearSolverResult object
         """
         pass
 
@@ -81,8 +78,8 @@ class SimplexSolver(LinearSolver):
     pivotRule: function (Default = Bland's Rule)
         A function that takes in a vector of reduced costs and returns the index of the variable to pivot on.
     """
-    def __init__(self, pivotRule=None,logFile=None, logLevel=logging.WARNING):
-        super().__init__(logFile=logFile,logLevel=logLevel)
+    def __init__(self, pivotRule=None,logFile=None, logLevel=logging.WARNING,logSparseFormat:bool=True):
+        super().__init__(logFile=logFile,logLevel=logLevel,logSparseFormat=logSparseFormat)
 
         if pivotRule is not None:
             self.pivotRule = pivotRule
@@ -168,7 +165,7 @@ class SimplexSolver(LinearSolver):
         self.logger.info("Determining Initial Feasible Basis...")
         targetBasisSize = lp.A_eq.shape[0]
         auxLP = self.FormulateAuxiliaryLP(lp)
-        self.logger.debug(f"Auxiliary LP:\n%s",auxLP)
+        self.logger.debug(f"Auxiliary LP:\n%s",auxLP.ToString(sparseFormat=self.logSparseFormat))
         B = np.empty(len(auxLP.b_eq),dtype=int) #The initial basis is up[i] if b[i] >= 0 and un[i] if b[i] < 0.
         positive_b = auxLP.b_eq > 0
         negative_b = ~positive_b
@@ -215,7 +212,7 @@ class SimplexSolver(LinearSolver):
         numZerosToSelect = targetBasisSize - len(nonZeroIndices)
         basis = np.hstack([nonZeroIndices,zeroIndices[:numZerosToSelect]])
         self.logger.debug("Initial Feasible Basis: %s",basis)
-        return basis, result.numItr, result.terminationCondition
+        return basis, result.numItr + 1, result.terminationCondition
     
     def AssertStandardForm(self,lp:LP):
         lp.AssertValidFormatting()
@@ -228,7 +225,7 @@ class SimplexSolver(LinearSolver):
         #Also assert that numVar >= numConstr otherwise tell user to take the dual transformation first.
         assert lp.A_eq.shape[0] <= numVar, "This LP has more constraints than variables. Please solve the dual of this problem instead."
 
-    def Solve(self,lp:LP,B:np.array=None,checkInitialSolution:bool=True,itrLimit=2147483647,timeLimit=None) -> tuple:
+    def Solve(self,lp:LP,B:np.array=None,checkInitialSolution:bool=True,itrLimit=2147483647,timeLimit=None,computeDualResult=False) -> LinearSolverResult:
         """
         Arguments
         ---------
@@ -242,10 +239,12 @@ class SimplexSolver(LinearSolver):
             The maximum number of iterations to use in this optimization.
         timeLimit: float (optional, Default = None)
             The maximum number of seconds you'd like the solver to run for. If None is provided, no time limit will be imposed.
+        computeDualResult: bool (optional, Default = False)
+            An indication of whether or not you'd like to return a LinearSolverResult for both the primal AND dual solutions.
         """
         self.AssertStandardForm(lp)
         self.logger.info("Beginning Solver Execution...")
-        self.logger.debug("Solving the following LP:\n%s",lp)
+        self.logger.debug("Solving the following LP:\n%s",lp.ToString(sparseFormat=self.logSparseFormat))
 
         tic = time.time()
         startItr = 0
@@ -255,7 +254,7 @@ class SimplexSolver(LinearSolver):
 
         if B is None:
             term = TerminationCondition.INFEASIBLE if terminationCondition == TerminationCondition.OPTIMAL else terminationCondition
-            return SolverResult(obj=np.infty,terminationCondition=term,numItr=startItr,solveTime=(time.time() - tic))
+            return LinearSolverResult(obj=np.infty,terminationCondition=term,numItr=startItr,solveTime=(time.time() - tic))
         
         if len(B) != lp.A_eq.shape[0]:
             message = "This LP requires a basis size of %s but a basis of size %s was provided."
@@ -284,7 +283,7 @@ class SimplexSolver(LinearSolver):
 
         if timeLimit is not None and (time.time() - tic) > timeLimit:
             self.logger.info("Time Limit Exceeded.")
-            return SolverResult(solution=x,obj=c@x,terminationCondition=TerminationCondition.TIME_LIMIT,numItr=startItr,solveTime=(time.time() - tic))
+            return LinearSolverResult(solution=x,obj=c@x,terminationCondition=TerminationCondition.TIME_LIMIT,numItr=startItr,solveTime=(time.time() - tic))
 
         if checkInitialSolution:
             self.logger.debug("Checking feasibility of the provided basis...")
@@ -299,7 +298,8 @@ class SimplexSolver(LinearSolver):
         itrTermination = False
         timeTermination = False
         for simplexIteration in range(startItr,itrLimit+1):
-            self.logger.debug(f"~~~ STARTING SIMPLEX ITERATION #{simplexIteration} ~~~")
+            self.logger.debug("~~~ STARTING SIMPLEX ITERATION #%s ~~~",simplexIteration)
+            self.logger.debug("A_B:\n%s",A_B.toarray())
             if simplexIteration >= itrLimit:
                 self.logger.info("Iteration Limit Reached.")
                 itrTermination = True
@@ -338,6 +338,7 @@ class SimplexSolver(LinearSolver):
             boundedIndices = np.where(dB < -1e-9)[0]
             self.logger.debug("boundedIndices: %s",boundedIndices)
             if len(boundedIndices) == 0:
+                self.logger.info("Problem was proven to be unbounded.")
                 unbounded = True
                 break
             
@@ -370,10 +371,6 @@ class SimplexSolver(LinearSolver):
 
             L,U,Pr,Pc = self.lu(A_B)
 
-        if unbounded:
-
-            return SolverResult(obj=-np.infty,terminationCondition=TerminationCondition.UNBOUNDED,numItr=simplexIteration,solveTime=(time.time() - tic))
-
         terminationCondition = TerminationCondition.OPTIMAL
         if itrTermination:
             terminationCondition = TerminationCondition.ITR_LIMIT
@@ -382,7 +379,64 @@ class SimplexSolver(LinearSolver):
 
         self.logger.info("Optimization Complete.")
 
-        result = SolverResult(solution=x,obj=c @ x, terminationCondition=terminationCondition, numItr=simplexIteration, solveTime=(time.time() - tic))
+        if unbounded:
+            terminationCondition = TerminationCondition.UNBOUNDED
+            result = LinearSolverResult(obj=-np.infty,terminationCondition=terminationCondition,numItr=simplexIteration,solveTime=(time.time() - tic))
+        else:
+            result = LinearSolverResult(solution=x,basis=B,obj=c @ x, terminationCondition=terminationCondition, numItr=simplexIteration, solveTime=(time.time() - tic))
 
-        return result
+        if computeDualResult:
+            """
+            Recall that the dual problem for an LP of the form
+
+            min c^T x
+            s.t. A x == b
+                x >= 0
+
+            is
+
+            min b^T y
+            s.t. -A^T y <= c
+
+            Given an optimal solution to the primal problem, any primal-basic variables will correspond with binding constraints in the dual problem (due to complementarity).
+
+            Thus, "y" can be solved for using the following relationship:
+
+            (-A^T)[B,:] y == c[B]
+            """
+            if terminationCondition == TerminationCondition.OPTIMAL:
+                y = self.SolveSystemUsingLUFactorizing(-L,U,Pr,Pc,cB,transposeLU=True)
+                dualResult = LinearSolverResult(
+                    solution=y,
+                    obj=-result.obj,
+                    terminationCondition=TerminationCondition.OPTIMAL,
+                    numItr=result.numItr,
+                    solveTime=result.solveTime
+                )
+            elif terminationCondition == TerminationCondition.INFEASIBLE:
+                dualResult = LinearSolverResult(
+                    solution=None,
+                    obj = -np.infty,
+                    terminationCondition=TerminationCondition.UNBOUNDED,
+                    numItr=result.numItr,
+                    solveTime=result.solveTime
+                )
+            elif terminationCondition == TerminationCondition.UNBOUNDED:
+                dualResult = LinearSolverResult(
+                    solution=None,
+                    obj = np.infty,
+                    terminationCondition=TerminationCondition.INFEASIBLE,
+                    numItr=result.numItr,
+                    solveTime=result.solveTime
+                )
+            else:
+                self.logger.warning("Only Optimal, Infeasible, of Unbounded solutions can directly produce dual solutions, not \"%s\"", terminationCondition)
+                dualResult = None
+
+            self.logger.debug("Dual Solution: %s", dualResult.solution)
+            
+            return result, dualResult
+
+        else:
+            return result
     
