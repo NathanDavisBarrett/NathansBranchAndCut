@@ -118,6 +118,55 @@ class SimplexSolver(LinearSolver):
             self.solve_triangular(U.transpose(),p,lower=True,overwrite_b=True)
             self.solve_triangular(L.transpose(),p,lower=False,overwrite_b=True)
             return Pr.transpose() @ p
+        
+    def presolve(self,lp:LP) -> LP:
+        """
+        A function to perform presolve operations on an LP to remove redundant constraints and detect infeasibility.
+
+        Arguments
+        ---------
+        lp: LP
+            The linear program you'd like to perform presolve operations on.
+
+        Returns
+        -------
+        lp: LP
+            The linear program after presolve operations have been performed.
+        """
+        self.AssertStandardForm(lp,checkFullRowRank=False)
+        self.logger.debug("Beginning Presolve Operations...")
+
+        # Find the LU factorization of A_eq
+        L,U,Pr,Pc = self.lu(lp.A_eq)
+
+        p = Pr @ lp.b_eq
+        self.solve_triangular(L,p,lower=True,overwrite_b=True)
+
+        # Check for infeasibilities
+        if np.any(np.isnan(p) | np.isinf(p)):
+            self.logger.info("Problem is infeasible.")
+            return TerminationCondition.INFEASIBLE
+        
+        self.solve_triangular(U,p,lower=False,overwrite_b=True)
+
+        #Check for infeasibilities
+        if np.any(np.isnan(p) | np.isinf(p)):
+            self.logger.info("Problem is infeasible.")
+            return TerminationCondition.INFEASIBLE
+        
+        #Check for redundant constraints
+        redundantRows = Find rows of U that are all zero.
+
+        originalRedundantRows = Pr[redundantRows,:].indices #CHECK THIS, ITS FROM CHATGPT
+
+        A_reduced = lp.A_eq[~originalRedundantRows,:]
+        b_reduced = lp.b_eq[~originalRedundantRows]
+
+        # Now assemble the new LP
+        KEEP GIONG HERE!
+
+
+        self.AssertStandardForm(lp,checkFullRowRank=True)
 
     def FormulateAuxiliaryLP(self,lp:LP) -> LP:
         """
@@ -214,7 +263,7 @@ class SimplexSolver(LinearSolver):
         self.logger.debug("Initial Feasible Basis: %s",basis)
         return basis, result.numItr + 1, result.terminationCondition
     
-    def AssertStandardForm(self,lp:LP):
+    def AssertStandardForm(self,lp:LP,checkFullRowRank=True):
         lp.AssertValidFormatting()
 
         numVar = lp.A_eq.shape[1]
@@ -222,8 +271,9 @@ class SimplexSolver(LinearSolver):
         assert np.sum(np.isnan(lp.ub)) == numVar
         assert np.allclose(lp.lb,np.zeros(numVar))
 
-        #Also assert that numVar >= numConstr otherwise tell user to take the dual transformation first.
-        assert lp.A_eq.shape[0] <= numVar, "This LP has more constraints than variables. Please solve the dual of this problem instead."
+        if checkFullRowRank:
+            # If this is the case, either there are redundant constraints, or the problem is infeasible. Both situations can be handled by a presolve step. https://en.wikipedia.org/wiki/Revised_simplex_method
+            assert lp.A_eq.shape[0] <= numVar, "This LP has more constraints than variables. This indicates the presolve has failed to either remove redundant constraints or has failed to detect infeasibility. In either case, there must be a bug."
 
     def Solve(self,lp:LP,B:np.array=None,checkInitialSolution:bool=True,itrLimit=2147483647,timeLimit=None,computeDualResult=False) -> LinearSolverResult:
         """
@@ -242,7 +292,8 @@ class SimplexSolver(LinearSolver):
         computeDualResult: bool (optional, Default = False)
             An indication of whether or not you'd like to return a LinearSolverResult for both the primal AND dual solutions.
         """
-        self.AssertStandardForm(lp)
+        self.presolve(lp)
+
         self.logger.info("Beginning Solver Execution...")
         self.logger.debug("Solving the following LP:\n%s",lp.ToString(sparseFormat=self.logSparseFormat))
 

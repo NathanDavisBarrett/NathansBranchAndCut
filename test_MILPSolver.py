@@ -129,7 +129,7 @@ def assertCorrect(milp):
     assert np.all(scipyAnswer >= -1e-6)
     assert np.all(myAnswer >= -1e-6)
     
-    scipyRounded = np.copy(sccipyAnswer)
+    scipyRounded = np.copy(scipyAnswer)
     scipyRounded[milp.integerVars] = np.round(scipyRounded[milp.integerVars])
     
     myRounded = np.copy(myAnswer)
