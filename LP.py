@@ -51,7 +51,7 @@ class LP:
         self.b_leq = b_leq
         self.lb = lb
         self.ub = ub
-        numVar = self.AssertValidFormatting()
+        self.numVar = numVar = self.AssertValidFormatting()
 
         self.c = c
 

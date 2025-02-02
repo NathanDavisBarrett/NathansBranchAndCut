@@ -5,7 +5,7 @@ from LP_Transformer import BasicTransformer
 
 import numpy as np
 from scipy.sparse import csr_matrix
-import cvxpy as cp
+from scipy.optimize import linprog as scipy_lp
 
 def GenerateRandomLP(numVar,numConstr,lb=-10,ub=10):
     c = np.random.uniform(lb,ub,numVar)
@@ -22,19 +22,12 @@ def GenerateRandomLP(numVar,numConstr,lb=-10,ub=10):
     transLP = trans.Transform()
     return transLP
 
-def SolveLPWithCvxpy(lp:LP):
+def SolveLPWithScipy(lp:LP):
     numConstr,numVar = lp.A_eq.shape
+    
+    result = scipy_lp(lp.c,A_eq=lp.A_eq,b_eq=lp.b_eq,bounds=(0,None))
 
-    x = cp.Variable(numVar)
-    prob = cp.Problem(
-        cp.Minimize(lp.c @ x),
-        [
-            lp.A_eq @ x == lp.b_eq,
-            x >= 0
-        ]
-    )
-    prob.solve()
-    return x.value
+    return result.x
 
 def SolveWithMySolver(lp,B=None):
     solver = SimplexSolver(logLevel=10)
@@ -42,7 +35,7 @@ def SolveWithMySolver(lp,B=None):
     return result.solution
 
 def assertCorrect(lp):
-    cvxpyAnswer = SolveLPWithCvxpy(lp)
+    cvxpyAnswer = SolveLPWithScipy(lp)
     myAnswer = SolveWithMySolver(lp)
 
     #Assert that both answers are feasible
@@ -148,3 +141,13 @@ def test_TimeLimit():
     solver = SimplexSolver()
     result = solver.Solve(lp,timeLimit=10)
     assert result.terminationCondition == TerminationCondition.TIME_LIMIT
+
+
+
+if __name__ == "__main__":
+    test_random1()
+    test_random10()
+    test_Infeasible()
+    test_Unbounded()
+    test_ItrLimit()
+    test_TimeLimit()
