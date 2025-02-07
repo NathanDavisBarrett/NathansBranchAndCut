@@ -1,4 +1,5 @@
 #include "LP_Transformer.h"
+#include "Utils.h"
 
 LP_Transformer::LP_Transformer(LP_General* original, bool maintainOwnership) {
 	this->original = original;
@@ -11,6 +12,32 @@ LP_Transformer::~LP_Transformer() {
 	if ((transformed != nullptr) && maintainOwnership) {
 		delete transformed;
 	}
+}
+
+void LP_Transformer::InsertSubmatrixLPT(RelevantMatrixIDs parentMatrixID, RelevantMatrixIDs subMatrixID, size_t startCol, size_t startRow, double coef = 1.0) {
+	Mat parentMatrix;
+	switch (parentMatrixID)
+	{
+	case LP_Transformer::original_A_eq:
+		parentMatrix = original->A_eq;
+	case LP_Transformer::original_A_leq:
+		parentMatrix = original->A_leq;
+	case LP_Transformer::transformed_A_eq:
+		parentMatrix = transformed->A_eq;
+	}
+
+	Mat subMatrix;
+	switch (subMatrixID)
+	{
+	case LP_Transformer::original_A_eq:
+		subMatrix = original->A_eq;
+	case LP_Transformer::original_A_leq:
+		subMatrix = original->A_leq;
+	case LP_Transformer::transformed_A_eq:
+		subMatrix = transformed->A_eq;
+	}
+
+	InsertSubmatrix(parentMatrix, subMatrix * coef, startCol, startRow);
 }
 
 void BasicTransformer::TransformLP() {
@@ -30,7 +57,14 @@ void BasicTransformer::TransformLP() {
 	transformed = new LP_StandardForm(newNumVar, newNumConstr);
 	transformed->reserve(newNumNonzeros);
 
-	//Now let's begin by loading the new A_eq matrix.
+	//Let's begin by inserting the positive and negative A_eq matrices.
+	InsertSubmatrixLPT(transformed_A_eq, original_A_eq, 0, 0);
+	InsertSubmatrixLPT(transformed_A_eq, original_A_eq, originalNumVar, 0, -1.0);
 
-	
+	//Next insert the positive and negative A_leq matrices.
+	InsertSubmatrixLPT(transformed_A_eq, original_A_leq, 0, originalNumEqConstr);
+	InsertSubmatrixLPT(transformed_A_eq, original_A_leq, originalNumVar, originalNumEqConstr, -1.0);
+
+
+
 }

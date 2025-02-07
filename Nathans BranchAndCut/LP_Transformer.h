@@ -21,6 +21,14 @@ public:
 	virtual Vec TransformSolution(Vec originalSolution) = 0;
 	virtual Vec UnTransformSolution(Vec transformedSolution) = 0;
 
+    enum RelevantMatrixIDs {
+        original_A_eq,
+        original_A_leq,
+        transformed_A_eq
+    };
+
+    void InsertSubmatrixLPT(RelevantMatrixIDs parentMatrixID, RelevantMatrixIDs subMatrixID, size_t startCol, size_t startRow, double coef);
+
     ~LP_Transformer();
 };
 

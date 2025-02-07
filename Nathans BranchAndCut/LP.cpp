@@ -97,6 +97,13 @@ size_t LP_General::GetNumUB() {
 	return numUB;
 }
 
+Mat::InnerIterator LP_General::A_eq_Itr(size_t coli) {
+	return Mat::InnerIterator(A_eq, coli);
+}
+Mat::InnerIterator LP_General::A_leq_Itr(size_t coli) {
+	return Mat::InnerIterator(A_leq, coli);
+}
+
 
 LP_StandardForm::LP_StandardForm(size_t numVar, size_t numConstr) {
 	A_eq = Mat(numConstr, numVar);
@@ -131,4 +138,8 @@ size_t LP_StandardForm::GetNumNonZeros() {
 
 void LP_StandardForm::reserve(size_t numNonZeros) {
 	A_eq.reserve(numNonZeros);
+}
+
+void LP_StandardForm::insert(size_t coli, size_t rowi, double value) {
+	A_eq.insert(rowi, coli) = value;
 }

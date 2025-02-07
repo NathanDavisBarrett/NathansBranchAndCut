@@ -34,6 +34,11 @@ public:
 
 	size_t GetNumLB();
 	size_t GetNumUB();
+
+	Mat::InnerIterator A_eq_Itr(size_t coli);
+	Mat::InnerIterator A_leq_Itr(size_t coli);
+
+	friend class LP_Transformer;
 };
 
 struct LP_StandardForm {
@@ -63,6 +68,9 @@ public:
 	size_t GetNumNonZeros();
 
 	void reserve(size_t numNonZeros);
+	void insert(size_t coli, size_t rowi, double value);
+
+	friend class LP_Transformer;
 };
 
 #endif
