@@ -1,4 +1,14 @@
+# Python Files
 *__pycache__/
 *.pytest_cache/
-*.vscode/
+*.vscode
+
+# Log Files
 *.log
+
+# Visual Studio Files
+*.sln
+*.vcxproj*
+x64/*
+*/x64/*
+.vs/*
