@@ -11,4 +11,5 @@ def test_Sorted():
     for i in range(len(result)):
         assert result[i] == expected[i]
 
-test_Sorted()
+if __name__ == "__main__":
+    test_Sorted()

@@ -14,7 +14,33 @@ from TerminationCondition import TerminationCondition
 
 
 class LinearSolverResult:
+    """
+    A data class to store the results of linear program optimization.
+    
+    This class encapsulates all the important information returned by a linear
+    solver, including the optimal solution, basis information, objective value,
+    and solver performance metrics.
+    
+    Attributes:
+        solution (np.array, optional): The optimal solution vector x.
+        basis (np.array, optional): Indices of the basic variables.
+        obj (float, optional): The optimal objective function value.
+        terminationCondition (TerminationCondition, optional): Why the solver terminated.
+        numItr (int, optional): Number of iterations performed.
+        solveTime (float, optional): Total time spent solving in seconds.
+    """
     def __init__(self,solution=None,basis=None,obj=None,terminationCondition=None,numItr=None,solveTime=None):
+        """
+        Initialize a LinearSolverResult instance.
+        
+        Args:
+            solution (np.array, optional): The optimal solution vector. Defaults to None.
+            basis (np.array, optional): Indices of basic variables. Defaults to None.
+            obj (float, optional): Optimal objective value. Defaults to None.
+            terminationCondition (TerminationCondition, optional): Termination reason. Defaults to None.
+            numItr (int, optional): Number of iterations. Defaults to None.
+            solveTime (float, optional): Solve time in seconds. Defaults to None.
+        """
         self.solution = solution
         self.basis = basis
         self.obj = obj
@@ -23,15 +49,39 @@ class LinearSolverResult:
         self.solveTime = solveTime
 
     def __repr__(self):
+        """
+        Return a formatted string representation of the solver results.
+        
+        Returns:
+            str: A human-readable summary of the optimization results including
+                 objective value, termination condition, iterations, and solve time.
+        """
         term = str(self.terminationCondition).replace("TerminationCondition.","")
         return f"~~~ SOLVER RESULT~~~\nOptimal Objective Function Value: {self.obj:.5e}\nTermination Condition: {term}\nNumber of Iterations: {self.numItr}\nSolve Time: {self.solveTime:.2f} seconds"
         
 
 class LinearSolver(ABC):
     """
-    An abstract base class for all linear solvers.
+    An abstract base class for all linear optimization solvers.
+    
+    This class provides a common interface and basic functionality for different
+    types of linear programming solvers. It includes logging capabilities and
+    defines the abstract method that all concrete solvers must implement.
+    
+    Attributes:
+        logger (logging.Logger): Logger instance for solver output.
+        logSparseFormat (bool): Whether to log sparse matrices in sparse format.
     """
     def __init__(self,logFile=None,logLevel=logging.WARNING,logger:logging.Logger=None,logSparseFormat:bool=True):
+        """
+        Initialize the linear solver with logging configuration.
+        
+        Args:
+            logFile (str, optional): Path to log file. If None, no file logging. Defaults to None.
+            logLevel (int, optional): Logging level (e.g., logging.INFO). Defaults to logging.WARNING.
+            logger (logging.Logger, optional): Custom logger instance. If None, creates new one. Defaults to None.
+            logSparseFormat (bool, optional): Whether to log sparse matrices in sparse format. Defaults to True.
+        """
         if logger is None:
             self.logger = logging.getLogger("LINEAR_SOLVER")
             self.logger.setLevel(logLevel)
@@ -56,29 +106,52 @@ class LinearSolver(ABC):
     @abstractmethod
     def Solve(self,lp:LP)-> LinearSolverResult:
         """
-        A function that takes in an lp and returns a LinearSolverResult object
+        Solve the given linear program.
+        
+        This is an abstract method that must be implemented by all concrete
+        linear solver subclasses.
+        
+        Args:
+            lp (LP): The linear program to solve.
+            
+        Returns:
+            LinearSolverResult: The solution result containing optimal solution,
+                               objective value, and solver information.
         """
         pass
 
 
 class SimplexSolver(LinearSolver):
     """
-    A class to house the simplex solver.
+    A concrete implementation of the Simplex algorithm for solving linear programs.
 
-    For this solver, LPs must be transformed to the following form:
+    This solver implements the two-phase simplex method for solving linear programs.
+    It requires LPs to be in standard form (equality constraints, non-negative variables).
+    Use an LP_Transformer to convert general form LPs to standard form before solving.
 
-        min c^T x
-        s.t. A == x
-             x >= 0
+    The solver supports:
+    - Two-phase method for finding initial feasible solutions
+    - Customizable pivot rules for variable selection
+    - Comprehensive logging and debugging capabilities
+    - Sparse matrix operations for efficiency
 
-        There are several ways to do this. Please select an LP_Transformer object to perform this task before passing the lp to this solver.
-
-    Required Arguments
-    ------------------
-    pivotRule: function (Default = Bland's Rule)
-        A function that takes in a vector of reduced costs and returns the index of the variable to pivot on.
+    Args:
+        pivotRule (callable, optional): Function for selecting pivot variable.
+            Takes reduced costs vector, returns variable index. Defaults to Bland's rule.
+        logFile (str, optional): Path for log file output. Defaults to None.
+        logLevel (int, optional): Logging verbosity level. Defaults to logging.WARNING.
+        logSparseFormat (bool, optional): Whether to log sparse matrices in sparse format. Defaults to True.
     """
     def __init__(self, pivotRule=None,logFile=None, logLevel=logging.WARNING,logSparseFormat:bool=True):
+        """
+        Initialize the SimplexSolver with specified parameters.
+        
+        Args:
+            pivotRule (callable, optional): Custom pivot rule function. If None, uses Bland's rule.
+            logFile (str, optional): Path to log file. Defaults to None.
+            logLevel (int, optional): Logging level. Defaults to logging.WARNING.
+            logSparseFormat (bool, optional): Log sparse matrices in sparse format. Defaults to True.
+        """
         super().__init__(logFile=logFile,logLevel=logLevel,logSparseFormat=logSparseFormat)
 
         if pivotRule is not None:
@@ -87,6 +160,21 @@ class SimplexSolver(LinearSolver):
             self.pivotRule = lambda cBar: (cBar < -1e-9).argmax(axis=0)
 
     def solve_triangular(self,L,b,*args,**kwargs):
+        """
+        Solve a triangular linear system Lx = b.
+        
+        Wrapper around scipy's sparse triangular solver with special handling
+        for 1x1 matrices which scipy cannot handle.
+        
+        Args:
+            L (csr_matrix): Lower triangular matrix.
+            b (np.array): Right-hand side vector.
+            *args: Additional positional arguments for spsolve_triangular.
+            **kwargs: Additional keyword arguments for spsolve_triangular.
+            
+        Returns:
+            np.array: Solution vector x such that Lx = b.
+        """
         if L.size > 1:    
             return spsolve_triangular(L,b,*args,**kwargs)
         else:
@@ -94,6 +182,20 @@ class SimplexSolver(LinearSolver):
             return b / L[0,0]
         
     def lu(self,A):
+        """
+        Compute LU factorization of matrix A.
+        
+        Performs LU decomposition with special handling for 1x1 matrices.
+        For larger matrices, uses scipy's sparse LU decomposition.
+        
+        Args:
+            A (csr_matrix): Square matrix to factorize.
+            
+        Returns:
+            tuple: For 1x1 matrices, returns (A, identity_matrix, identity_matrix, identity_matrix).
+                   For larger matrices, returns (L, U, Pr, Pc) where L and U are the
+                   factorization matrices and Pr, Pc are row/column permutation matrices.
+        """
         if A.size > 1:    
             LU = splu(A)
             L = LU.L
@@ -107,6 +209,23 @@ class SimplexSolver(LinearSolver):
         return L,U,Pr,Pc
 
     def SolveSystemUsingLUFactorizing(self,L,U,Pr,Pc,b,transposeLU=False):
+        """
+        Solve linear system using precomputed LU factorization.
+        
+        Solves the system Ax = b using the LU factorization A = Pr^T * L * U * Pc^T.
+        Can solve either the original system or its transpose.
+        
+        Args:
+            L (csr_matrix): Lower triangular factor from LU decomposition.
+            U (csr_matrix): Upper triangular factor from LU decomposition.
+            Pr (csr_matrix): Row permutation matrix from LU decomposition.
+            Pc (csr_matrix): Column permutation matrix from LU decomposition.
+            b (np.array): Right-hand side vector.
+            transposeLU (bool, optional): If True, solves A^T x = b. Defaults to False.
+            
+        Returns:
+            np.array: Solution vector x.
+        """
         if not transposeLU:
             p = Pr @ b
             self.solve_triangular(L,p,lower=True,overwrite_b=True)
@@ -121,17 +240,23 @@ class SimplexSolver(LinearSolver):
         
     def presolve(self,lp:LP) -> LP:
         """
-        A function to perform presolve operations on an LP to remove redundant constraints and detect infeasibility.
+        Perform presolve operations to remove redundant constraints and detect infeasibility.
 
-        Arguments
-        ---------
-        lp: LP
-            The linear program you'd like to perform presolve operations on.
+        Analyzes the constraint matrix to identify and remove redundant constraints
+        that do not affect the feasible region. This preprocessing step can improve
+        solver performance and detect infeasible problems early.
 
-        Returns
-        -------
-        lp: LP
-            The linear program after presolve operations have been performed.
+        Args:
+            lp (LP): The linear program to preprocess.
+
+        Returns:
+            LP: A new LP instance with redundant constraints removed, or the original
+                LP if no redundancies are found.
+                
+        Note:
+            This method uses LU factorization to identify linearly dependent rows
+            in the constraint matrix. Currently contains placeholder implementation
+            that needs completion.
         """
         self.AssertStandardForm(lp,checkFullRowRank=False)
         self.logger.debug("Beginning Presolve Operations...")
@@ -155,53 +280,49 @@ class SimplexSolver(LinearSolver):
             return TerminationCondition.INFEASIBLE
         
         #Check for redundant constraints
-        redundantRows = Find rows of U that are all zero.
+        # TODO: Find rows of U that are all zero
+        redundantRows = []  # Placeholder - implementation needed
 
-        originalRedundantRows = Pr[redundantRows,:].indices #CHECK THIS, ITS FROM CHATGPT
+        # TODO: originalRedundantRows = Pr[redundantRows,:].indices #CHECK THIS, ITS FROM CHATGPT
 
-        A_reduced = lp.A_eq[~originalRedundantRows,:]
-        b_reduced = lp.b_eq[~originalRedundantRows]
+        # TODO: A_reduced = lp.A_eq[~originalRedundantRows,:]
+        # TODO: b_reduced = lp.b_eq[~originalRedundantRows]
 
-        # Now assemble the new LP
-        KEEP GIONG HERE!
+        # TODO: Now assemble the new LP
+        # TODO: Continue implementation here
 
 
         self.AssertStandardForm(lp,checkFullRowRank=True)
 
     def FormulateAuxiliaryLP(self,lp:LP) -> LP:
         """
-        A function to generate the auxiliary LP for a given LP.
+        Generate the auxiliary (Phase I) linear program for finding initial feasible solution.
 
-        The auxiliary LP of an original LP is the same LP but with all constraints augmented with auxiliary variables to make every constraint feasible.
+        The auxiliary LP augments the original constraints with auxiliary variables to
+        ensure initial feasibility. The objective becomes minimizing the sum of auxiliary
+        variables, which equals zero if and only if the original problem is feasible.
 
-        The objective of this auxiliary LP is to drive all auxiliary variables to zero.
+        For the original LP:
+            min c^T x
+            s.t. A x = b
+                 x >= 0
 
-        In math, given the following LP
+        The auxiliary LP is:
+            min sum(u_pos) + sum(u_neg)
+            s.t. A x + u_pos - u_neg = b
+                 x >= 0, u_pos >= 0, u_neg >= 0
 
-        min c^T X
-        s.t. A x == b
-             x >= 0
+        where u_pos and u_neg are auxiliary variables for positive and negative constraint violations.
 
-        The auxiliary problem is formulated as follows (here "u" are the auxiliary variables added to each constraint.)
+        Args:
+            lp (LP): The original linear program in standard form.
 
-        min up + un
-        s.t. A x + up - un == b
-             x >= 0
-             up >= 0
-             un >= 0
-
-        The auxiliary problem has a known feasible initial basis: up[i] if b[i] >= 0 and un[i] if b[i] < 0.
-
-
-        Arguments
-        ---------
-        lp: LP
-            The linear program you'd like to generate the auxiliary LP for.
-
-        Returns
-        -------
-        auxLP: LP
-            The auxiliary LP
+        Returns:
+            LP: The auxiliary linear program with auxiliary variables added.
+            
+        Note:
+            The auxiliary LP has an obvious initial feasible solution and if its optimal
+            value is zero, the original LP is feasible.
         """
         numConstr,numVar = lp.A_eq.shape
         newA = hstack([lp.A_eq,identity(numConstr),-identity(numConstr)]).tocsr()
@@ -211,6 +332,29 @@ class SimplexSolver(LinearSolver):
         return auxLP
         
     def DetermineInitialFeasibleBasis(self,lp:LP,itrLimit,timeLimit):
+        """
+        Find an initial feasible basis for the linear program using the two-phase method.
+        
+        Implements Phase I of the simplex method by solving an auxiliary LP to find
+        an initial feasible basic solution for the original problem. If the auxiliary
+        problem has optimal value zero, the original problem is feasible.
+        
+        Args:
+            lp (LP): The linear program in standard form.
+            itrLimit (int): Maximum number of iterations allowed.
+            timeLimit (float, optional): Maximum time limit in seconds.
+            
+        Returns:
+            tuple: A tuple containing:
+                - basis (np.array or None): Indices of basic variables for initial feasible solution,
+                  or None if no feasible solution found within limits.
+                - numItr (int): Number of iterations used.
+                - terminationCondition (TerminationCondition): Reason for termination.
+                
+        Raises:
+            Exception: If the auxiliary problem is infeasible or unbounded (indicating
+                      a serious error in problem formulation).
+        """
         self.logger.info("Determining Initial Feasible Basis...")
         targetBasisSize = lp.A_eq.shape[0]
         auxLP = self.FormulateAuxiliaryLP(lp)
@@ -264,6 +408,27 @@ class SimplexSolver(LinearSolver):
         return basis, result.numItr + 1, result.terminationCondition
     
     def AssertStandardForm(self,lp:LP,checkFullRowRank=True):
+        """
+        Verify that the linear program is in standard form required by the simplex solver.
+        
+        Standard form requires:
+        - Only equality constraints (no inequalities)
+        - No upper bounds on variables  
+        - Lower bounds should be zero (non-negativity)
+        - Optionally, constraint matrix should have full row rank
+        
+        Args:
+            lp (LP): The linear program to validate.
+            checkFullRowRank (bool, optional): Whether to verify that the constraint
+                matrix has full row rank. Defaults to True.
+                
+        Raises:
+            AssertionError: If the LP is not in proper standard form.
+            
+        Note:
+            This method ensures the LP meets the structural requirements for
+            the simplex algorithm implementation.
+        """
         lp.AssertValidFormatting()
 
         numVar = lp.A_eq.shape[1]

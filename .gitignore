@@ -2,3 +2,11 @@
 *.pytest_cache/
 *.vscode/
 *.log
+
+*.sln
+*.vcxproj*
+
+
+x64/
+FileContentIndex/
+v17/

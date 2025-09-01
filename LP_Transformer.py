@@ -8,40 +8,81 @@ import numpy as np
 
 class LP_Transformer:
     """
-    A class to facilitate the transformation of an LP to standard form.
+    Abstract base class for transforming linear programs to standard form.
 
-    Inputted LPs should be of the form
+    Facilitates the conversion of general form linear programs to the standard form
+    required by simplex-based solvers. Standard form eliminates inequality constraints
+    and variable bounds, converting them to equality constraints with non-negative variables.
 
-    min c^T x
-    s.t. A_eq x = b_eq
-         A_leq x <= b_leq
-         lb <= x <= ub
+    Input LP form:
+        min c^T x
+        s.t. A_eq x = b_eq
+             A_leq x <= b_leq
+             lb <= x <= ub
 
-    After transformation, the resulting LPs should be in standard form:
-    min c^T x
-    s.t. A x == b
-         x >= 0
+    Output standard form:
+        min c^T x
+        s.t. A x = b
+             x >= 0
 
-    The following methods must be implemented in any child class:
-
-    Transform(): A function that transforms a full-blown lp to it's transformed form.
-
-    UnTransform(x): A function that, given the solution to the transformed lp, returns the corresponding original solution.
+    Attributes:
+        originalLP (LP): The original linear program to be transformed.
+        
+    Note:
+        Subclasses must implement Transform() and UnTransform() methods.
     """
     def __init__(self,lp:LP):
+        """
+        Initialize the transformer with a linear program.
+        
+        Args:
+            lp (LP): The linear program to be transformed.
+        """
         self.originalLP = lp
 
     @abstractmethod
     def Transform(self):
+        """
+        Transform the linear program to standard form.
+        
+        This method must be implemented by subclasses to convert the original
+        LP to standard form suitable for simplex algorithms.
+        
+        Returns:
+            LP: The transformed linear program in standard form.
+        """
         pass
 
     @abstractmethod
     def UnTransform(self,x):
+        """
+        Convert solution from transformed space back to original space.
+        
+        Takes a solution to the transformed LP and returns the corresponding
+        solution to the original LP.
+        
+        Args:
+            x (np.array): Solution vector from the transformed LP.
+            
+        Returns:
+            np.array: Solution vector for the original LP.
+        """
         pass
 
     def IsStandardForm(self,lp:LP):
         """
-        A function that determines whether or not a provided LP is in standard form or not.
+        Determine whether a linear program is in standard form.
+        
+        Standard form requires:
+        - No inequality constraints (A_leq x <= b_leq)
+        - No upper bounds on variables
+        - All lower bounds should be zero (non-negativity)
+        
+        Args:
+            lp (LP): The linear program to check.
+            
+        Returns:
+            bool: True if the LP is in standard form, False otherwise.
         """
         numLeq = len(lp.b_leq)
         if numLeq != 0:

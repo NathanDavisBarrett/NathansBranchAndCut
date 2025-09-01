@@ -12,7 +12,33 @@ import numpy as np
 import time
 
 class MILPSolverResult:
+    """
+    Container for mixed-integer linear program solver results.
+    
+    Stores the results of solving a MILP including the optimal integer solution,
+    objective values, performance metrics, and termination information.
+    
+    Attributes:
+        solution (np.array, optional): The optimal integer solution.
+        obj (float, optional): The optimal integer objective value.
+        relaxObj (float, optional): The optimal LP relaxation objective value.
+        terminationCondition (TerminationCondition, optional): Why the solver terminated.
+        numNodesExplored (int, optional): Number of branch-and-bound nodes explored.
+        solveTime (float, optional): Total solve time in seconds.
+        mipGap (float): The MIP optimality gap between integer and relaxed solutions.
+    """
     def __init__(self,solution=None,obj=None,relaxObj=None,terminationCondition=None,numNodesExplored=None,solveTime=None):
+        """
+        Initialize a MILP solver result.
+        
+        Args:
+            solution (np.array, optional): Optimal solution vector. Defaults to None.
+            obj (float, optional): Optimal integer objective value. Defaults to None.
+            relaxObj (float, optional): LP relaxation objective value. Defaults to None.
+            terminationCondition (TerminationCondition, optional): Termination reason. Defaults to None.
+            numNodesExplored (int, optional): Number of B&B nodes explored. Defaults to None.
+            solveTime (float, optional): Total solve time in seconds. Defaults to None.
+        """
         self.solution = solution
         self.obj = obj
         self.relaxObj = relaxObj
@@ -22,17 +48,46 @@ class MILPSolverResult:
         self.mipGap = np.abs((self.obj - self.relaxObj) / self.obj)
 
     def __repr__(self):
+        """
+        Return a formatted string representation of the MILP solver results.
+        
+        Returns:
+            str: Human-readable summary including objective values, termination
+                 condition, iterations, solve time, and MIP gap.
+        """
         term = str(self.terminationCondition).replace("TerminationCondition.","")
         return f"~~~ SOLVER RESULT~~~\nOptimal Integer Objective Function Value: {self.obj:.5e}\nOptimal Relaxed Objective Function Value: {self.relaxObj:.5e}\nTermination Condition: {term}\nNumber of Iterations: {self.numItr}\nSolve Time: {self.solveTime:.2f} seconds\nMIP Gap: {self.gap:.5e}"
 
 class UnboundedError(Exception):
+    """Exception raised when the LP relaxation is unbounded."""
     pass
 
 class NodeSolutionError(Exception):
+    """Exception raised when there's an error solving a branch-and-bound node."""
     pass
 
 class MILPSolver(ABC):
+    """
+    Abstract base class for Mixed-Integer Linear Program solvers.
+    
+    Provides the framework for implementing branch-and-bound and other MILP
+    solution algorithms. Handles logging, LP relaxation solving, and common
+    MILP solver functionality.
+    
+    Attributes:
+        linearSolver (SimplexSolver): The LP solver used for relaxations.
+        logger (logging.Logger): Logger for solver output and debugging.
+    """
     def __init__(self,linearSolver:SimplexSolver,logFile=None,logLevel=logging.WARNING,logger:logging.Logger=None):
+        """
+        Initialize the MILP solver.
+        
+        Args:
+            linearSolver (SimplexSolver): LP solver for solving relaxations.
+            logFile (str, optional): Path to log file. Defaults to None.
+            logLevel (int, optional): Logging level. Defaults to logging.WARNING.
+            logger (logging.Logger, optional): Custom logger. If None, creates new one. Defaults to None.
+        """
         if logger is None:
             self.logger = logging.getLogger("MILP_SOLVER")
             self.logger.setLevel(logLevel)
