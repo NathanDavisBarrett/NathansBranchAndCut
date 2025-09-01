@@ -2,7 +2,9 @@
 #define LP_H
 
 #include "VecMatHeader.h"
-#include "LP_Transformer.h"
+
+//#include "LP_Transformer.h"
+class LP_Transformer;
 
 struct LP_General {
 	/**
@@ -32,11 +34,28 @@ public:
 	size_t GetNumEqNonZeros();
 	size_t GetNumLeqNonZeros();
 
+	bool HasLB(size_t i);
+	bool HasUB(size_t i);
+
 	size_t GetNumLB();
 	size_t GetNumUB();
 
 	Mat::InnerIterator A_eq_Itr(size_t coli);
 	Mat::InnerIterator A_leq_Itr(size_t coli);
+
+	const Mat Get_A_eq();
+	const Mat Get_A_leq();
+
+	const Vec Get_b_eq();
+	const Vec Get_b_leq();
+
+	const Vec Get_lb();
+	const Vec Get_ub();
+	const Vec Get_lb_Condensed();
+	const Vec Get_ub_Condensed();
+
+	const Vec Get_c();
+
 
 	friend class LP_Transformer;
 };

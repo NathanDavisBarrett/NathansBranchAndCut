@@ -3,6 +3,8 @@
 
 #include "VecMatHeader.h"
 
-void InsertSubmatrix(Mat& parentMatrix, Mat subMatrix, size_t startCol, size_t startRow);
+#define SP_IDENTITY(name, deg) Mat name(deg, deg); name.setIdentity();
+
+void InsertSubmatrix(Mat& parentMatrix, const Mat& subMatrix, size_t startCol, size_t startRow);
 
 #endif // !UTILS_H

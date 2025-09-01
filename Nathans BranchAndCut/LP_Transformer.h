@@ -1,13 +1,16 @@
 ﻿#ifndef LP_TRANSFORMER_H
 #define LP_TRANSFORMER_H
 
-#include "LP.h"
-
 #include "VecMatHeader.h"
+#include "LP.h"
 
 class LP_Transformer {
 	/**
 	*  A class to handle the transformation of a general LP to a standard form LP.
+    * 
+    *  Note that, due to the two-step nature of initializing a transformer, a transformer should be initialized using the following syntax:
+    * 
+    *     Child_Transformer trans = LP_Transformer::Create<Child_Transformer>(generalLP, maintOwnership);
 	*/
 protected:
 	LP_General* original;
@@ -15,11 +18,11 @@ protected:
 	virtual void TransformLP() = 0;
     bool maintainOwnership;
 
-public:
-	LP_Transformer(LP_General* original, bool maintainOwnership = true);
+    LP_Transformer(LP_General* original, bool maintainOwnership = true);
 
-	virtual Vec TransformSolution(Vec originalSolution) = 0;
-	virtual Vec UnTransformSolution(Vec transformedSolution) = 0;
+public:
+	virtual Vec TransformSolution(const Vec& originalSolution) = 0;
+	virtual Vec UnTransformSolution(const Vec& transformedSolution) = 0;
 
     enum RelevantMatrixIDs {
         original_A_eq,
@@ -27,9 +30,32 @@ public:
         transformed_A_eq
     };
 
-    void InsertSubmatrixLPT(RelevantMatrixIDs parentMatrixID, RelevantMatrixIDs subMatrixID, size_t startCol, size_t startRow, double coef);
+    //void InsertSubmatrixLPT(RelevantMatrixIDs parentMatrixID, RelevantMatrixIDs subMatrixID, size_t startCol, size_t startRow, double coef);
+    void InsertSubmatrixLPT(RelevantMatrixIDs parentMatrixID, const Mat& subMatrix, size_t startCol, size_t startRow, double coef = 1.0);
+
+    //template<typename... Vec>
+    //void InsertToB(const Vec&... vecs);
+    void InsertToB(const Vec& v);
+    void InsertToB(const Vec& v1, const Vec& v2);
+    void InsertToB(const Vec& v1, const Vec& v2, const Vec& v3);
+    void InsertToB(const Vec& v1, const Vec& v2, const Vec& v3, const Vec& v4);
+
+    void InsertToC(const Vec& v);
+    void InsertToC(const Vec& v1, const Vec& v2);
+    void InsertToC(const Vec& v1, const Vec& v2, const Vec& v3);
+    void InsertToC(const Vec& v1, const Vec& v2, const Vec& v3, const Vec& v4);
+
+    //template<typename... Vec>
+    //void InsertToC(const Vec&... vecs);
 
     ~LP_Transformer();
+
+    template <typename T>
+    static T Create(LP_General* original, bool maintainOwnership = true) {
+        T obj(original, maintainOwnership);
+        obj.TransformLP();
+        return obj;
+    }
 };
 
 class BasicTransformer : public LP_Transformer {
@@ -70,9 +96,11 @@ class BasicTransformer : public LP_Transformer {
     *
     *  Where I' is the identity matrix with rows removed that have their "1" value in a column that represents a variable that does not have a lower bound. Likewise, I'' is the identity matrix with rows removed that have their "1" value in a column that represents a variable that does not have an upper bound.
 	*/
+protected:
     void TransformLP();
-    Vec TransformSolution(Vec originalSolution);
-    Vec UnTransformSolution(Vec transformedSolution);
+public:
+    Vec TransformSolution(Vec& originalSolution);
+    Vec UnTransformSolution(Vec& transformedSolution);
 };
 
 

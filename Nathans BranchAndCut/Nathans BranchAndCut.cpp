@@ -2,23 +2,27 @@
 //
 
 #include <iostream>
-
+#include "VecMatHeader.h"
 #include "LP.h"
+#include "LP_Transformer.h"
 
 int main()
 {
-    LP_General lp(5, 5, 5);
+    Mat A_eq(5, 5);
+    Vec b_eq(5);
 
-    LP_StandardForm lps(5, 5);
+    Mat A_leq(5, 5);
+    Vec b_leq(5);
+
+    Vec lb(5);
+    Vec ub(5);
+    Vec c(5);
+
+    LP_General genLP(A_eq, b_eq, A_leq, b_leq, lb, ub, c);
+
+    BasicTransformer trans = LP_Transformer::Create(&genLP, true);
+
+
 }
 
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
 
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file

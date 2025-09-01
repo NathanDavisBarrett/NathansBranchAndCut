@@ -72,13 +72,20 @@ size_t LP_General::GetNumLeqNonZeros() {
 	return A_leq.nonZeros();
 }
 
+bool LP_General::HasLB(size_t i) {
+	return !std::isnan(lb(i));
+}
+bool LP_General::HasUB(size_t i) {
+	return !std::isnan(ub(i));
+}
+
 size_t LP_General::GetNumLB() {
 	/**
 	*  A function to determine the number of non-NaN lower bounds present.
 	*/
 	size_t numLB = 0;
 	for (size_t i = 0; i < GetNumVar(); i++) {
-		if (std::isnan(lb(i))) {
+		if (HasLB(i)) {
 			numLB++;
 		}
 	}
@@ -90,7 +97,7 @@ size_t LP_General::GetNumUB() {
 	*/
 	size_t numUB = 0;
 	for (size_t i = 0; i < GetNumVar(); i++) {
-		if (std::isnan(ub(i))) {
+		if (HasUB(i)) {
 			numUB++;
 		}
 	}
@@ -102,6 +109,51 @@ Mat::InnerIterator LP_General::A_eq_Itr(size_t coli) {
 }
 Mat::InnerIterator LP_General::A_leq_Itr(size_t coli) {
 	return Mat::InnerIterator(A_leq, coli);
+}
+
+const Mat LP_General::Get_A_eq() {
+	return A_eq;
+}
+const Mat LP_General::Get_A_leq() {
+	return A_leq;
+}
+
+const Vec LP_General::Get_b_eq() {
+	return b_eq;
+}
+const Vec LP_General::Get_b_leq() {
+	return b_leq;
+}
+
+const Vec LP_General::Get_lb() {
+	return lb;
+}
+const Vec LP_General::Get_ub() {
+	return ub;
+}
+const Vec LP_General::Get_lb_Condensed() {
+	Vec lbc(GetNumLB());
+	size_t ii = 0;
+	for (size_t i = 0; i < GetNumVar(); i++) {
+		if (HasLB(i)) {
+			lbc(ii) = lb(i);
+		}
+	}
+	return lbc;
+}
+const Vec LP_General::Get_ub_Condensed() {
+	Vec ubc(GetNumUB());
+	size_t ii = 0;
+	for (size_t i = 0; i < GetNumVar(); i++) {
+		if (HasUB(i)) {
+			ubc(ii) = lb(i);
+		}
+	}
+	return ubc;
+}
+
+const Vec LP_General::Get_c() {
+	return c;
 }
 
 
