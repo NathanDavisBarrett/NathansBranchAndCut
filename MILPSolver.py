@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from LinearSolver import SimplexSolver, LinearSolverResult
+from LinearSolver import SimplexSolver
 from TerminationCondition import TerminationCondition
 from MILP import MILP
 from LP import LP
@@ -506,7 +506,6 @@ class BranchAndCut(MILPSolver):
             """
             This function is copied from ChatGPT.
             """
-            import matplotlib.pyplot as plt
             import networkx as nx
 
             shapes = set((node[1]["shape"] for node in G.nodes(data=True)))
@@ -821,7 +820,7 @@ class BranchAndCut(MILPSolver):
             action, args, kwargs = self.DetermineAction(tree)
             try:
                 newIncumbent = action(tree, *args, **kwargs)
-            except UnboundedError as e:
+            except UnboundedError:
                 self.logger.info("Problem was proven to be unbounded.")
                 term = TerminationCondition.UNBOUNDED
                 break

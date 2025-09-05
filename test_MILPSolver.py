@@ -13,7 +13,8 @@ from scipy.optimize import LinearConstraint as scipy_constr
 
 import time
 
-import logging, os
+import logging
+import os
 
 
 def test_small():
@@ -95,6 +96,7 @@ def SolveMILPWithScipy(milp: MILP):
     result = scipy_milp(
         milp.c, integrality=integrality, constraints=constraints, bounds=(0, None)
     )
+    return result.x
 
 
 def SolveMILPWithMySolver(milp: MILP):

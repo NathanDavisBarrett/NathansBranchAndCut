@@ -1,6 +1,5 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from warnings import warn
 import time
 import logging
 
