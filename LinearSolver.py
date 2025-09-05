@@ -1,7 +1,3 @@
-from scipy.sparse import csr_matrix, identity, hstack, vstack
-from scipy.sparse.linalg import splu, spsolve_triangular, spsolve
-
-
 import numpy as np
 from abc import ABC, abstractmethod
 from warnings import warn
@@ -188,140 +184,6 @@ class SimplexSolver(LinearSolver):
         else:
             self.pivotRule = lambda cBar: (cBar < -1e-9).argmax(axis=0)
 
-    def solve_triangular(self, L, b, *args, **kwargs):
-        """
-        Solve a triangular linear system Lx = b.
-
-        Wrapper around scipy's sparse triangular solver with special handling
-        for 1x1 matrices which scipy cannot handle.
-
-        Args:
-            L (csr_matrix): Lower triangular matrix.
-            b (np.array): Right-hand side vector.
-            *args: Additional positional arguments for spsolve_triangular.
-            **kwargs: Additional keyword arguments for spsolve_triangular.
-
-        Returns:
-            np.array: Solution vector x such that Lx = b.
-        """
-        if L.size > 1:
-            return spsolve_triangular(L, b, *args, **kwargs)
-        else:
-            # Scipy's sparse solvers can't handle a 1X1 matrix.
-            return b / L[0, 0]
-
-    def lu(self, A):
-        """
-        Compute LU factorization of matrix A.
-
-        Performs LU decomposition with special handling for 1x1 matrices.
-        For larger matrices, uses scipy's sparse LU decomposition.
-
-        Args:
-            A (csr_matrix): Square matrix to factorize.
-
-        Returns:
-            tuple: For 1x1 matrices, returns (A, identity_matrix, identity_matrix, identity_matrix).
-                   For larger matrices, returns (L, U, Pr, Pc) where L and U are the
-                   factorization matrices and Pr, Pc are row/column permutation matrices.
-        """
-        if A.size > 1:
-            LU = splu(A)
-            L = LU.L
-            U = LU.U
-            n = LU.perm_r.shape[0]
-            Pr = csr_matrix((np.ones(n), (LU.perm_r, np.arange(n))), shape=(n, n))
-            Pc = csr_matrix((np.ones(n), (np.arange(n), LU.perm_c)), shape=(n, n))
-        else:
-            L = A
-            U = Pr = Pc = csr_matrix(np.identity(1))
-        return L, U, Pr, Pc
-
-    def SolveSystemUsingLUFactorizing(self, L, U, Pr, Pc, b, transposeLU=False):
-        """
-        Solve linear system using precomputed LU factorization.
-
-        Solves the system Ax = b using the LU factorization A = Pr^T * L * U * Pc^T.
-        Can solve either the original system or its transpose.
-
-        Args:
-            L (csr_matrix): Lower triangular factor from LU decomposition.
-            U (csr_matrix): Upper triangular factor from LU decomposition.
-            Pr (csr_matrix): Row permutation matrix from LU decomposition.
-            Pc (csr_matrix): Column permutation matrix from LU decomposition.
-            b (np.array): Right-hand side vector.
-            transposeLU (bool, optional): If True, solves A^T x = b. Defaults to False.
-
-        Returns:
-            np.array: Solution vector x.
-        """
-        if not transposeLU:
-            p = Pr @ b
-            self.solve_triangular(L, p, lower=True, overwrite_b=True)
-            self.solve_triangular(U, p, lower=False, overwrite_b=True)
-            return Pc @ p
-        else:
-            # Remember that (AB)^T = B^T A^T
-            p = Pc.transpose() @ b
-            self.solve_triangular(U.transpose(), p, lower=True, overwrite_b=True)
-            self.solve_triangular(L.transpose(), p, lower=False, overwrite_b=True)
-            return Pr.transpose() @ p
-
-    def presolve(self, lp: LP) -> LP:
-        """
-        Perform presolve operations to remove redundant constraints and detect infeasibility.
-
-        Analyzes the constraint matrix to identify and remove redundant constraints
-        that do not affect the feasible region. This preprocessing step can improve
-        solver performance and detect infeasible problems early.
-
-        Args:
-            lp (LP): The linear program to preprocess.
-
-        Returns:
-            LP: A new LP instance with redundant constraints removed, or the original
-                LP if no redundancies are found.
-
-        Note:
-            This method uses LU factorization to identify linearly dependent rows
-            in the constraint matrix. Currently contains placeholder implementation
-            that needs completion.
-        """
-        self.AssertStandardForm(lp, checkFullRowRank=False)
-        self.logger.debug("Beginning Presolve Operations...")
-
-        # Find the LU factorization of A_eq
-        L, U, Pr, Pc = self.lu(lp.A_eq)
-
-        p = Pr @ lp.b_eq
-        self.solve_triangular(L, p, lower=True, overwrite_b=True)
-
-        # Check for infeasibilities
-        if np.any(np.isnan(p) | np.isinf(p)):
-            self.logger.info("Problem is infeasible.")
-            return TerminationCondition.INFEASIBLE
-
-        self.solve_triangular(U, p, lower=False, overwrite_b=True)
-
-        # Check for infeasibilities
-        if np.any(np.isnan(p) | np.isinf(p)):
-            self.logger.info("Problem is infeasible.")
-            return TerminationCondition.INFEASIBLE
-
-        # Check for redundant constraints
-        # TODO: Find rows of U that are all zero
-        redundantRows = []  # Placeholder - implementation needed
-
-        # TODO: originalRedundantRows = Pr[redundantRows,:].indices #CHECK THIS, ITS FROM CHATGPT
-
-        # TODO: A_reduced = lp.A_eq[~originalRedundantRows,:]
-        # TODO: b_reduced = lp.b_eq[~originalRedundantRows]
-
-        # TODO: Now assemble the new LP
-        # TODO: Continue implementation here
-
-        self.AssertStandardForm(lp, checkFullRowRank=True)
-
     def FormulateAuxiliaryLP(self, lp: LP) -> LP:
         """
         Generate the auxiliary (Phase I) linear program for finding initial feasible solution.
@@ -353,7 +215,7 @@ class SimplexSolver(LinearSolver):
             value is zero, the original LP is feasible.
         """
         numConstr, numVar = lp.A_eq.shape
-        newA = hstack([lp.A_eq, identity(numConstr), -identity(numConstr)]).tocsr()
+        newA = np.hstack([lp.A_eq, np.identity(numConstr), -np.identity(numConstr)])
         newc = np.hstack([np.zeros(numVar), np.ones(2 * numConstr)])
 
         auxLP = LP(newc, newA, lp.b_eq, lb=np.zeros(len(newc)))
@@ -387,7 +249,7 @@ class SimplexSolver(LinearSolver):
         targetBasisSize = lp.A_eq.shape[0]
         auxLP = self.FormulateAuxiliaryLP(lp)
         self.logger.debug(
-            f"Auxiliary LP:\n%s", auxLP.ToString(sparseFormat=self.logSparseFormat)
+            "Auxiliary LP:\n%s", auxLP.ToString(sparseFormat=self.logSparseFormat)
         )
         B = np.empty(
             len(auxLP.b_eq), dtype=int
@@ -513,7 +375,6 @@ class SimplexSolver(LinearSolver):
         computeDualResult: bool (optional, Default = False)
             An indication of whether or not you'd like to return a LinearSolverResult for both the primal AND dual solutions.
         """
-        self.presolve(lp)
 
         self.logger.info("Beginning Solver Execution...")
         self.logger.debug(
@@ -559,9 +420,7 @@ class SimplexSolver(LinearSolver):
         A_B = A[:, B]
         cB = lp.c[B]
 
-        L, U, Pr, Pc = self.lu(A_B)
-
-        xB = self.SolveSystemUsingLUFactorizing(L, U, Pr, Pc, b)
+        xB = np.linalg.solve(A_B, b)
         x = np.zeros(numVar)
         x[B] = xB
 
@@ -593,7 +452,7 @@ class SimplexSolver(LinearSolver):
             self.logger.debug(
                 "~~~ STARTING SIMPLEX ITERATION #%s ~~~", simplexIteration
             )
-            self.logger.debug("A_B:\n%s", A_B.toarray())
+            self.logger.debug("A_B:\n%s", A_B)
             if simplexIteration >= itrLimit:
                 self.logger.info("Iteration Limit Reached.")
                 itrTermination = True
@@ -605,7 +464,7 @@ class SimplexSolver(LinearSolver):
 
             # Step 1: Compute reduced costs
             # Step 1-a: Solve for "p"
-            p = self.SolveSystemUsingLUFactorizing(L, U, Pr, Pc, cB, transposeLU=True)
+            p = np.linalg.solve(A_B.T, cB)
 
             # Step 1-b: Solve for reduced costs
             cBar = c - A_T @ p
@@ -624,8 +483,8 @@ class SimplexSolver(LinearSolver):
                 raise Exception("Attempting to pivot a basis index into the basis!")
 
             # Step 4: Select direction
-            jCol = (-A[:, j]).toarray().flatten()
-            dB = self.SolveSystemUsingLUFactorizing(L, U, Pr, Pc, jCol).flatten()
+            jCol = (-A[:, j]).flatten()
+            dB = np.linalg.solve(A_B, jCol)
             self.logger.debug("dB: %s", dB)
 
             # Step 5: Check if the problem is unbounded
@@ -664,8 +523,6 @@ class SimplexSolver(LinearSolver):
             self.logger.debug("New Basis: %s", B)
             cB[minIndex] = c[j]
             A_B[:, minIndex] = A[:, j]
-
-            L, U, Pr, Pc = self.lu(A_B)
 
         terminationCondition = TerminationCondition.OPTIMAL
         if itrTermination:
@@ -713,9 +570,7 @@ class SimplexSolver(LinearSolver):
             (-A^T)[B,:] y == c[B]
             """
             if terminationCondition == TerminationCondition.OPTIMAL:
-                y = self.SolveSystemUsingLUFactorizing(
-                    -L, U, Pr, Pc, cB, transposeLU=True
-                )
+                y = np.linalg.solve(-A_B.T, cB)
                 dualResult = LinearSolverResult(
                     solution=y,
                     obj=-result.obj,

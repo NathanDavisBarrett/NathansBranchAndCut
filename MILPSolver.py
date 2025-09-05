@@ -1,4 +1,4 @@
-from abc import ABC,abstractmethod
+from abc import ABC, abstractmethod
 
 from LinearSolver import SimplexSolver, LinearSolverResult
 from TerminationCondition import TerminationCondition
@@ -6,18 +6,18 @@ from MILP import MILP
 from LP import LP
 from LinkedList import LinkedList, SortedLinkedList, LinkedListNode
 
-from scipy.sparse import csr_matrix, identity, hstack, vstack
 import logging
 import numpy as np
 import time
 
+
 class MILPSolverResult:
     """
     Container for mixed-integer linear program solver results.
-    
+
     Stores the results of solving a MILP including the optimal integer solution,
     objective values, performance metrics, and termination information.
-    
+
     Attributes:
         solution (np.array, optional): The optimal integer solution.
         obj (float, optional): The optimal integer objective value.
@@ -27,10 +27,19 @@ class MILPSolverResult:
         solveTime (float, optional): Total solve time in seconds.
         mipGap (float): The MIP optimality gap between integer and relaxed solutions.
     """
-    def __init__(self,solution=None,obj=None,relaxObj=None,terminationCondition=None,numNodesExplored=None,solveTime=None):
+
+    def __init__(
+        self,
+        solution=None,
+        obj=None,
+        relaxObj=None,
+        terminationCondition=None,
+        numNodesExplored=None,
+        solveTime=None,
+    ):
         """
         Initialize a MILP solver result.
-        
+
         Args:
             solution (np.array, optional): Optimal solution vector. Defaults to None.
             obj (float, optional): Optimal integer objective value. Defaults to None.
@@ -50,38 +59,50 @@ class MILPSolverResult:
     def __repr__(self):
         """
         Return a formatted string representation of the MILP solver results.
-        
+
         Returns:
             str: Human-readable summary including objective values, termination
                  condition, iterations, solve time, and MIP gap.
         """
-        term = str(self.terminationCondition).replace("TerminationCondition.","")
+        term = str(self.terminationCondition).replace("TerminationCondition.", "")
         return f"~~~ SOLVER RESULT~~~\nOptimal Integer Objective Function Value: {self.obj:.5e}\nOptimal Relaxed Objective Function Value: {self.relaxObj:.5e}\nTermination Condition: {term}\nNumber of Iterations: {self.numItr}\nSolve Time: {self.solveTime:.2f} seconds\nMIP Gap: {self.gap:.5e}"
+
 
 class UnboundedError(Exception):
     """Exception raised when the LP relaxation is unbounded."""
+
     pass
+
 
 class NodeSolutionError(Exception):
     """Exception raised when there's an error solving a branch-and-bound node."""
+
     pass
+
 
 class MILPSolver(ABC):
     """
     Abstract base class for Mixed-Integer Linear Program solvers.
-    
+
     Provides the framework for implementing branch-and-bound and other MILP
     solution algorithms. Handles logging, LP relaxation solving, and common
     MILP solver functionality.
-    
+
     Attributes:
         linearSolver (SimplexSolver): The LP solver used for relaxations.
         logger (logging.Logger): Logger for solver output and debugging.
     """
-    def __init__(self,linearSolver:SimplexSolver,logFile=None,logLevel=logging.WARNING,logger:logging.Logger=None):
+
+    def __init__(
+        self,
+        linearSolver: SimplexSolver,
+        logFile=None,
+        logLevel=logging.WARNING,
+        logger: logging.Logger = None,
+    ):
         """
         Initialize the MILP solver.
-        
+
         Args:
             linearSolver (SimplexSolver): LP solver for solving relaxations.
             logFile (str, optional): Path to log file. Defaults to None.
@@ -94,10 +115,14 @@ class MILPSolver(ABC):
 
             if logFile is not None:
                 file_handler = logging.FileHandler(logFile)
-                file_handler.setLevel(logLevel)  # Set the desired log level for the file
+                file_handler.setLevel(
+                    logLevel
+                )  # Set the desired log level for the file
 
                 # Create a logging format
-                formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                formatter = logging.Formatter(
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                )
                 file_handler.setFormatter(formatter)
 
                 # Add the file handler to the logger
@@ -108,7 +133,7 @@ class MILPSolver(ABC):
         self.linearSolver = linearSolver
 
     @abstractmethod
-    def Solve(self,milp:MILP)-> MILPSolverResult:
+    def Solve(self, milp: MILP) -> MILPSolverResult:
         """
         A function that takes in a milp and returns a MILPSolverResult object
         """
@@ -166,8 +191,8 @@ class BranchAndCut(MILPSolver):
          │  -A^T     -A'^T  ││  y   │ == │ c │
          │└─     ─┘└─     ─┘││└─  ─┘│    │   │
          └─                ─┘│┌─  ─┐│    └─ ─┘
-                             │  y'  │    
-                             │└─  ─┘│ 
+                             │  y'  │
+                             │└─  ─┘│
                              └─    ─┘
          [y, y'] >= 0
 
@@ -179,21 +204,34 @@ class BranchAndCut(MILPSolver):
 
     KEEP GOING HERE!
     """
+
     class Tree:
         """
         A class to house information about the b & b tree used in the solution of this problem.
         """
-        def __init__(self,milp:MILP,lpSolver:SimplexSolver,logFile=None,logLevel=logging.WARNING,logger:logging.Logger=None):
+
+        def __init__(
+            self,
+            milp: MILP,
+            lpSolver: SimplexSolver,
+            logFile=None,
+            logLevel=logging.WARNING,
+            logger: logging.Logger = None,
+        ):
             if logger is None:
                 self.logger = logging.getLogger("MILP_SOLVER")
                 self.logger.setLevel(logLevel)
 
                 if logFile is not None:
                     file_handler = logging.FileHandler(logFile)
-                    file_handler.setLevel(logLevel)  # Set the desired log level for the file
+                    file_handler.setLevel(
+                        logLevel
+                    )  # Set the desired log level for the file
 
                     # Create a logging format
-                    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    formatter = logging.Formatter(
+                        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                    )
                     file_handler.setFormatter(formatter)
 
                     # Add the file handler to the logger
@@ -201,16 +239,16 @@ class BranchAndCut(MILPSolver):
             else:
                 self.logger = logger
 
-            self.headNode = self.HeadNode(milp,self.logger)
+            self.headNode = self.HeadNode(milp, self.logger)
             self.c = milp.c
             self.lpSolver = lpSolver
 
             self.integerVars = milp.integerVars
 
-            #A list of the active nodes to be considered SORTED by which one has the best bound.
+            # A list of the active nodes to be considered SORTED by which one has the best bound.
             #   "Active" means a node that has been solved and who might have child nodes of interest.
-            self.ActiveNodes = SortedLinkedList([],key=lambda x:x.primalSolution.obj)
-            
+            self.ActiveNodes = SortedLinkedList([], key=lambda x: x.primalSolution.obj)
+
             self.incumbentNode = None
             self.incumbentObj = None
 
@@ -220,7 +258,14 @@ class BranchAndCut(MILPSolver):
             self.SolveNode(self.headNode)
 
         class Node(ABC):
-            def __init__(self,c:np.ndarray,integerVars:np.ndarray,depth:int,coordinate:str,logger:logging.Logger):
+            def __init__(
+                self,
+                c: np.ndarray,
+                integerVars: np.ndarray,
+                depth: int,
+                coordinate: str,
+                logger: logging.Logger,
+            ):
                 self.c = c
                 self.integerVars = integerVars
                 self.depth = depth
@@ -235,45 +280,72 @@ class BranchAndCut(MILPSolver):
 
                 self.childNodes = set([])
 
-
             @abstractmethod
-            def Assemble_A_b(self,leaf=True):
+            def Assemble_A_b(self, leaf=True):
                 """
                 A function that create the A_eq and b_eq components for the "Problem 2-D" formulation of this node.
                 """
                 pass
 
-            def Solve(self,lpSolver:SimplexSolver):
+            def Solve(self, lpSolver: SimplexSolver):
                 """
                 A function to solve the LP associated with this node.
                 """
-                A,b = self.Assemble_A_b(leaf=True)
-                duaLp = LP(c=b,A_eq=-A.tocsr().transpose(),b_eq=self.c,lb=np.zeros(len(b)))
-                if hasattr(self,"parentNode") and self.parentNode.dualSolution.terminationCondition == TerminationCondition.OPTIMAL:
+                A, b = self.Assemble_A_b(leaf=True)
+                duaLp = LP(c=b, A_eq=-A.transpose(), b_eq=self.c, lb=np.zeros(len(b)))
+                if (
+                    hasattr(self, "parentNode")
+                    and self.parentNode.dualSolution.terminationCondition
+                    == TerminationCondition.OPTIMAL
+                ):
                     B = np.copy(self.parentNode.dualSolution.basis)
                 else:
                     B = None
-                result = lpSolver.Solve(duaLp,B=B,computeDualResult=True) #Recall the dual of the dual is the primal. Thus from the node's perspective the original primal problem is the dual of the node's problem and vice versa.
-                self.dualSolution, self.primalSolution = result
-                
-                
+                result = lpSolver.Solve(
+                    duaLp, B=B, computeDualResult=True
+                )  # Recall the dual of the dual is the primal. Thus from the node's perspective the original primal problem is the dual of the node's problem and vice versa.
+                try:
+                    self.dualSolution, self.primalSolution = result
+                except TypeError:
+                    self.dualSolution = result
+                    self.primalSolution = None
+                    self.logger.debug(
+                        'Node "%s" solved with infeasible primal termination condition',
+                        self.coordinate,
+                    )
+
                 self.solved = True
 
                 self.DetermineIntegrality()
-                
-                self.logger.debug("Node \"%s\" solved with primal termination condition of %s and an integrality status of %s", self.coordinate, self.primalSolution.terminationCondition,self.isIntegral)
-                self.logger.debug("Node \"%s\" produced the following primal solution: %s", self.coordinate, self.primalSolution.solution)
+
+                if self.primalSolution is not None:
+                    self.logger.debug(
+                        'Node "%s" solved with primal termination condition of %s and an integrality status of %s',
+                        self.coordinate,
+                        self.primalSolution.terminationCondition,
+                        self.isIntegral,
+                    )
+                    self.logger.debug(
+                        'Node "%s" produced the following primal solution: %s',
+                        self.coordinate,
+                        self.primalSolution.solution,
+                    )
 
             def DetermineIntegrality(self):
                 """
                 A function to determine and assign the value of self.isIntegral
                 """
-                if self.primalSolution.terminationCondition != TerminationCondition.OPTIMAL:
+                if self.primalSolution is None:
+                    self.isIntegral = False
+                elif (
+                    self.primalSolution.terminationCondition
+                    != TerminationCondition.OPTIMAL
+                ):
                     self.isIntegral = False
                 else:
                     supposedIntegerVars = self.primalSolution.solution[self.integerVars]
                     integerValues = np.rint(supposedIntegerVars)
-                    error = np.abs(supposedIntegerVars-integerValues)
+                    error = np.abs(supposedIntegerVars - integerValues)
                     self.isIntegral = np.all(error <= 1e-6)
 
             def __hash__(self):
@@ -283,14 +355,25 @@ class BranchAndCut(MILPSolver):
             """
             A class to house a node of the B & B tree.
             """
-            def __init__(self,c:np.array,integerVars:np.array,parentNode,addedConstraints_A:csr_matrix,addedConstraints_b:np.array,depth:int,coordinate:str,logger):
-                super().__init__(c,integerVars,depth,coordinate,logger)
+
+            def __init__(
+                self,
+                c: np.array,
+                integerVars: np.array,
+                parentNode,
+                addedConstraints_A: np.array,
+                addedConstraints_b: np.array,
+                depth: int,
+                coordinate: str,
+                logger,
+            ):
+                super().__init__(c, integerVars, depth, coordinate, logger)
                 self.addedConstraints_A = addedConstraints_A
                 self.addedConstraints_b = addedConstraints_b
 
                 self.parentNode = parentNode
-            
-            def Assemble_A_b(self,leaf=True):
+
+            def Assemble_A_b(self, leaf=True):
                 """
                 A function to assemble the A_eq and b_eq components of "Problem 2-D" for this node that is represented by this node.
 
@@ -298,59 +381,67 @@ class BranchAndCut(MILPSolver):
 
                 We desire to assemble A' and b'. This will be done by vertically stacking rows together. But to make the stacking of these rows as easy as possible. We'll collect each grouping of added constraint in a linked list (for rapid linking of different results)
                 """
-                #Step 1, collect my added constraints.
+                # Step 1, collect my added constraints.
                 aList = LinkedList(reverseIteration=True)
                 bList = LinkedList(reverseIteration=True)
 
                 aList.append(self.addedConstraints_A)
                 bList.append(self.addedConstraints_b)
 
-                #Step 2, collect added constraints from parent node.
+                # Step 2, collect added constraints from parent node.
                 result = self.parentNode.Assemble_A_b(leaf=False)
                 aList.extend(result[0])
                 bList.extend(result[1])
 
-                #Step 3, return the results
+                # Step 3, return the results
                 if leaf:
-                    A = vstack(aList)
-                    b = np.hstack(tuple(bList)) #TODO: hstack currently requires a __getitem__ method. A pull request was submitted to fix this problem. Thus the tuple conversion might not be required in the future.
-                    return A,b
+                    A = np.vstack(list(aList))
+                    b = np.hstack(
+                        tuple(bList)
+                    )  # TODO: hstack currently requires a __getitem__ method. A pull request was submitted to fix this problem. Thus the tuple conversion might not be required in the future.
+                    return A, b
                 else:
-                    return aList,bList
-                    
+                    return aList, bList
+
         class HeadNode(Node):
             """
             The head node of a B & B tree.
             """
-            def __init__(self,problem:MILP,logger:logging.Logger):
-                super().__init__(problem.c,problem.integerVars,0,"head",logger)
+
+            def __init__(self, problem: MILP, logger: logging.Logger):
+                super().__init__(problem.c, problem.integerVars, 0, "head", logger)
                 self.baseLP = problem
 
-
-            def Assemble_A_b(self,leaf=True):
-                #Step 1, collect my added constraints.
+            def Assemble_A_b(self, leaf=True):
+                # Step 1, collect my added constraints.
                 aList = LinkedList(reverseIteration=True)
                 bList = LinkedList(reverseIteration=True)
 
                 aList.append(self.baseLP.A_leq)
                 bList.append(self.baseLP.b_leq)
 
-                #Step 2, return the results
+                # Step 2, return the results
                 if leaf:
-                    A = vstack(aList)
-                    b = np.hstack(tuple(bList)) #TODO: hstack currently requires a __getitem__ method. A pull request was submitted to fix this problem. Thus the tuple conversion might not be required in the future.
-                    return A,b
+                    A = np.vstack(list(aList))
+                    b = np.hstack(
+                        tuple(bList)
+                    )  # TODO: hstack currently requires a __getitem__ method. A pull request was submitted to fix this problem. Thus the tuple conversion might not be required in the future.
+                    return A, b
                 else:
-                    return aList,bList
+                    return aList, bList
 
-        def SolveNode(self,node:Node):
+        def SolveNode(self, node: Node):
             """
             A function to solve a given node and handle whether or not it should now be considered an active node or not.
 
             This function also returns a boolean indicating whether or not the solution of this node has lead to a new incumbent solution or not.
             """
             node.Solve(self.lpSolver)
-            if node.primalSolution.terminationCondition == TerminationCondition.OPTIMAL:
+            if (
+                node.primalSolution is not None
+                and node.primalSolution.terminationCondition
+                == TerminationCondition.OPTIMAL
+            ):
                 obj = node.primalSolution.obj
                 if node.isIntegral:
                     if self.incumbentObj is None or obj < self.incumbentObj:
@@ -358,43 +449,52 @@ class BranchAndCut(MILPSolver):
                         self.incumbentNode = node
                         return True
                     else:
-                        #This is a sub-optimal integer solution. Do not consider this node as active.
+                        # This is a sub-optimal integer solution. Do not consider this node as active.
                         return False
                 else:
                     if self.incumbentObj is not None and obj >= self.incumbentObj:
-                        #This relaxed LP is still worse than the best integer solution. Do not consider this node as active
+                        # This relaxed LP is still worse than the best integer solution. Do not consider this node as active
                         return False
                     else:
-                        #This node could still yield integral child nodes that out-perform the incumbent solution. Label this node as "Active"
+                        # This node could still yield integral child nodes that out-perform the incumbent solution. Label this node as "Active"
                         self.ActiveNodes.insert(node)
                         return False
-            elif node.primalSolution.terminationCondition == TerminationCondition.INFEASIBLE:
-                #There is no use in pursuing any child nodes of this node since they'll all be infeasible. Do not consider this node as active.
+            elif (
+                node.primalSolution is None
+                or node.primalSolution.terminationCondition
+                == TerminationCondition.INFEASIBLE
+            ):
+                # There is no use in pursuing any child nodes of this node since they'll all be infeasible. Do not consider this node as active.
                 return False
-            elif node.primalSolution.terminationCondition == TerminationCondition.UNBOUNDED:
-                #An un-bounded child problem indicates an unbounded master problem.
+            elif (
+                node.primalSolution.terminationCondition
+                == TerminationCondition.UNBOUNDED
+            ):
+                # An un-bounded child problem indicates an unbounded master problem.
                 raise UnboundedError()
             else:
-                #An un-determined sub-problem will cause problems for the MILP solver overall.
-                raise NodeSolutionError(f"Node was able to reach an acceptable terminal condition. It's termination condition was {node.primalSolution.terminationCondition}")
-            
+                # An un-determined sub-problem will cause problems for the MILP solver overall.
+                raise NodeSolutionError(
+                    f"Node was able to reach an acceptable terminal condition. It's termination condition was {node.primalSolution.terminationCondition}"
+                )
+
         @property
         def bestBoundNode(self):
             if self.ActiveNodes.headNode is None:
                 return None
             return self.ActiveNodes.headNode.value
-        
+
         @property
         def bestBoundObj(self):
             if self.bestBoundNode is None or self.bestBoundNode.primalSolution is None:
                 return np.infty
             return self.bestBoundNode.primalSolution.obj
-        
+
         @property
         def bestRGap(self):
             if self.incumbentObj is None or self.bestBoundObj is None:
                 return np.infty
-            return np.abs((self.bestBoundObj - self.incumbentObj)/self.incumbentObj)
+            return np.abs((self.bestBoundObj - self.incumbentObj) / self.incumbentObj)
 
         @property
         def bestAGap(self):
@@ -402,21 +502,27 @@ class BranchAndCut(MILPSolver):
                 return np.infty
             return np.abs((self.bestBoundObj - self.incumbentObj))
 
-        def _draw_graph_with_shapes_and_colors(self,G,pos):
+        def _draw_graph_with_shapes_and_colors(self, G, pos):
             """
             This function is copied from ChatGPT.
             """
             import matplotlib.pyplot as plt
             import networkx as nx
 
-            shapes = set((node[1]['shape'] for node in G.nodes(data=True)))
-            
+            shapes = set((node[1]["shape"] for node in G.nodes(data=True)))
+
             for shape in shapes:
-                nodes_with_shape = [node for node in G.nodes(data=True) if node[1]['shape'] == shape]
-                nx.draw_networkx_nodes(G, pos, nodelist=[node[0] for node in nodes_with_shape], 
-                                    node_color=[node[1]['color'] for node in nodes_with_shape], 
-                                    node_shape=shape)
-            
+                nodes_with_shape = [
+                    node for node in G.nodes(data=True) if node[1]["shape"] == shape
+                ]
+                nx.draw_networkx_nodes(
+                    G,
+                    pos,
+                    nodelist=[node[0] for node in nodes_with_shape],
+                    node_color=[node[1]["color"] for node in nodes_with_shape],
+                    node_shape=shape,
+                )
+
             nx.draw_networkx_edges(G, pos)
             nx.draw_networkx_labels(G, pos)
 
@@ -426,11 +532,17 @@ class BranchAndCut(MILPSolver):
             from matplotlib.lines import Line2D
             from networkx.drawing.nx_pydot import graphviz_layout
 
-            def add_edges(graph:nx.Graph, node):
-                if self.incumbentNode is not None and node.coordinate == self.incumbentNode.coordinate:
+            def add_edges(graph: nx.Graph, node):
+                if (
+                    self.incumbentNode is not None
+                    and node.coordinate == self.incumbentNode.coordinate
+                ):
                     shape = "s"
                     color = "gold"
-                elif self.bestBoundNode is not None and node.coordinate == self.bestBoundNode.coordinate:
+                elif (
+                    self.bestBoundNode is not None
+                    and node.coordinate == self.bestBoundNode.coordinate
+                ):
                     shape = "o"
                     color = "lawngreen"
                 elif node.isIntegral:
@@ -439,27 +551,62 @@ class BranchAndCut(MILPSolver):
                 else:
                     shape = "o"
                     color = "deepskyblue"
-                
+
                 graph.add_node(node.coordinate, shape=shape, color=color)
                 for child in node.childNodes:
                     graph.add_edge(node.coordinate, child.coordinate)
-                    add_edges(graph,child)
+                    add_edges(graph, child)
+
             graph = nx.DiGraph()
-            add_edges(graph,self.headNode)
+            add_edges(graph, self.headNode)
 
-            pos = graphviz_layout(graph,prog="dot")
-            self._draw_graph_with_shapes_and_colors(graph,pos)
+            pos = graphviz_layout(graph, prog="dot")
+            self._draw_graph_with_shapes_and_colors(graph, pos)
 
-            incumbentPatch = Line2D([0], [0], color='gold', marker='s', linestyle='None', markersize=10, label='Incumbent Solution')
-            bestBoundPatch = Line2D([0], [0], color='lawngreen', marker='o', linestyle='None', markersize=10, label='Best Bound')
-            integerPatch = Line2D([0], [0], color='deepskyblue', marker='s', linestyle='None', markersize=10, label='Integer Solution')
-            fractionalPatch = Line2D([0], [0], color='deepskyblue', marker='o', linestyle='None', markersize=10, label='Fractional Solution')
+            incumbentPatch = Line2D(
+                [0],
+                [0],
+                color="gold",
+                marker="s",
+                linestyle="None",
+                markersize=10,
+                label="Incumbent Solution",
+            )
+            bestBoundPatch = Line2D(
+                [0],
+                [0],
+                color="lawngreen",
+                marker="o",
+                linestyle="None",
+                markersize=10,
+                label="Best Bound",
+            )
+            integerPatch = Line2D(
+                [0],
+                [0],
+                color="deepskyblue",
+                marker="s",
+                linestyle="None",
+                markersize=10,
+                label="Integer Solution",
+            )
+            fractionalPatch = Line2D(
+                [0],
+                [0],
+                color="deepskyblue",
+                marker="o",
+                linestyle="None",
+                markersize=10,
+                label="Fractional Solution",
+            )
 
-            plt.legend(handles=[incumbentPatch,bestBoundPatch,integerPatch,fractionalPatch])
+            plt.legend(
+                handles=[incumbentPatch, bestBoundPatch, integerPatch, fractionalPatch]
+            )
 
             plt.show()
 
-    def Branch(self,tree:Tree,llNode:LinkedListNode,variable:int):
+    def Branch(self, tree: Tree, llNode: LinkedListNode, variable: int):
         """
         The code to handle the branching of a given node upon a given variable.
 
@@ -485,31 +632,45 @@ class BranchAndCut(MILPSolver):
         minVal = int(np.floor(varVal))
         maxVal = minVal + 1
 
-        self.logger.debug("Branching at node \"%s\" on variable %s with value %s", node.coordinate, variable, varVal)
+        self.logger.debug(
+            'Branching at node "%s" on variable %s with value %s',
+            node.coordinate,
+            variable,
+            varVal,
+        )
 
-        addedA = csr_matrix(([1,],([0,],[variable,])),shape=(1,len(node.c)))
+        addedA = np.zeros((1, len(node.c)))
+        addedA[0, variable] = 1
 
         newDepth = node.depth + 1
 
         minNode = self.Tree.StandardNode(
-            c = node.c,
+            c=node.c,
             integerVars=node.integerVars,
             parentNode=node,
             addedConstraints_A=addedA,
-            addedConstraints_b=np.array([minVal,]),
+            addedConstraints_b=np.array(
+                [
+                    minVal,
+                ]
+            ),
             depth=newDepth,
-            coordinate=f"N{tree.numTotalNodes}",#node.coordinate + f"-{variable}_l_{minVal}",
-            logger=tree.logger
+            coordinate=f"N{tree.numTotalNodes}",  # node.coordinate + f"-{variable}_l_{minVal}",
+            logger=tree.logger,
         )
         maxNode = self.Tree.StandardNode(
-            c = node.c,
+            c=node.c,
             integerVars=node.integerVars,
             parentNode=node,
             addedConstraints_A=-addedA,
-            addedConstraints_b=np.array([-maxVal,]),
+            addedConstraints_b=np.array(
+                [
+                    -maxVal,
+                ]
+            ),
             depth=newDepth,
-            coordinate=f"N{tree.numTotalNodes+1}",#node.coordinate + f"-{variable}_g_{maxVal}",
-            logger=tree.logger
+            coordinate=f"N{tree.numTotalNodes+1}",  # node.coordinate + f"-{variable}_g_{maxVal}",
+            logger=tree.logger,
         )
 
         node.childNodes.add(minNode)
@@ -519,15 +680,16 @@ class BranchAndCut(MILPSolver):
             tree.maxDepth = newDepth
         tree.numTotalNodes += 2
 
-        #Since this will no longer be a leaf node, we will not consider it as active any more.
+        # Since this will no longer be a leaf node, we will not consider it as active any more.
         tree.ActiveNodes.remove(llNode)
-
 
         minIncumb = tree.SolveNode(minNode)
         maxIncumb = tree.SolveNode(maxNode)
         return minIncumb or maxIncumb
 
-    def AddCuts(self,tree:Tree,llNode:LinkedListNode,cut_A:csr_matrix,cut_b:np.array):
+    def AddCuts(
+        self, tree: Tree, llNode: LinkedListNode, cut_A: np.array, cut_b: np.array
+    ):
         """
         The code the handle the addition of cuts to a given node.
 
@@ -549,18 +711,23 @@ class BranchAndCut(MILPSolver):
         """
         node = llNode.value
 
-        self.logger.debug("Adding the following cut to node \"%s\": %s \n %s",node.coordinate,cut_A,cut_b)
+        self.logger.debug(
+            'Adding the following cut to node "%s": %s \n %s',
+            node.coordinate,
+            cut_A,
+            cut_b,
+        )
 
         newDepth = node.depth + 1
         newNode = self.Tree.StandardNode(
-            c = node.c,
+            c=node.c,
             integerVars=node.integerVars,
             parentNode=node,
             addedConstraints_A=cut_A,
             addedConstraints_b=cut_b,
             depth=newDepth,
-            coordinate=f"N{tree.numTotalNodes}",#node.coordinate + "-ct",
-            logger=tree.logger
+            coordinate=f"N{tree.numTotalNodes}",  # node.coordinate + "-ct",
+            logger=tree.logger,
         )
 
         node.childNodes.add(newNode)
@@ -569,32 +736,37 @@ class BranchAndCut(MILPSolver):
             tree.maxDepth = newDepth
         tree.numTotalNodes += 1
 
-        #Don't consider the parent node active any more:
+        # Don't consider the parent node active any more:
         tree.ActiveNodes.remove(llNode)
 
         return tree.SolveNode(newNode)
 
-    def TestOptimal(self,tree:Tree):
+    def TestOptimal(self, tree: Tree):
         """
         For a B & C - based MILP solver, the optimum is determined when there are no more active nodes to consider.
         """
         numActive = len(tree.ActiveNodes)
-        self.logger.debug("There are %s active nodes.",numActive)
+        self.logger.debug("There are %s active nodes.", numActive)
         return numActive == 0
-        
-    def PruneViaOptimality(self,tree:Tree):
+
+    def PruneViaOptimality(self, tree: Tree):
         """
         Some nodes are self-pruned when they are solved (e.g. the node is infeasible or produces a lp-relaxed obj. that is inferior to the incumbent solution). But some nodes might be considered active until the incumbent solution is improved upon. In such a case, a sweep should be done to prune and nodes that might become inactive due to the new incumbent solution. This function executes this sweep.
         """
         nodei = tree.ActiveNodes.headNode
         while nodei is not None:
             if nodei.value.primalSolution.obj >= tree.incumbentObj:
-                self.logger.debug("Pruning node \"%s\" with relaxed obj. of %s due to improved incumbent solution (%s).",nodei.value.coordinate,nodei.value.primalSolution.obj,tree.incumbentObj)
+                self.logger.debug(
+                    'Pruning node "%s" with relaxed obj. of %s due to improved incumbent solution (%s).',
+                    nodei.value.coordinate,
+                    nodei.value.primalSolution.obj,
+                    tree.incumbentObj,
+                )
                 tree.ActiveNodes.remove(nodei)
             nodei = nodei.nextNode
 
     @abstractmethod
-    def DetermineAction(self,tree):
+    def DetermineAction(self, tree):
         """
         A function that takes in the current solution tree and determines which action should be taken next (e.g. whether or not to branch or cut, which node and/or variable to branch or cut on).
 
@@ -614,10 +786,17 @@ class BranchAndCut(MILPSolver):
         """
         pass
 
-    def Solve(self, milp: MILP, aGap:float=0.0, rGap:float=0.0, timeLimit:float=np.infty,returnTree:bool=False) -> MILPSolverResult:
+    def Solve(
+        self,
+        milp: MILP,
+        aGap: float = 0.0,
+        rGap: float = 0.0,
+        timeLimit: float = np.infty,
+        returnTree: bool = False,
+    ) -> MILPSolverResult:
         self.logger.info("Starting MILP solver run.")
         self.logger.debug("Constructing solver tree.")
-        tree = self.Tree(milp,self.linearSolver,logger=self.logger)
+        tree = self.Tree(milp, self.linearSolver, logger=self.logger)
 
         term = TerminationCondition.OPTIMAL
         tic = time.time()
@@ -633,53 +812,60 @@ class BranchAndCut(MILPSolver):
                 self.logger.info("Optimization terminated due to relative gap limit.")
                 term = TerminationCondition.REL_GAP_LIMIT
                 break
-            if toc-tic > timeLimit:
+            if toc - tic > timeLimit:
                 self.logger.info("Optimization terminated due to time limit.")
                 term = TerminationCondition.TIME_LIMIT
                 break
 
             self.logger.debug("Determining action...")
-            action,args,kwargs = self.DetermineAction(tree)
+            action, args, kwargs = self.DetermineAction(tree)
             try:
-                newIncumbent = action(tree,*args,**kwargs)
+                newIncumbent = action(tree, *args, **kwargs)
             except UnboundedError as e:
                 self.logger.info("Problem was proven to be unbounded.")
                 term = TerminationCondition.UNBOUNDED
                 break
             if newIncumbent:
-                self.logger.debug("New incumbent solution found. Attempting to prune via optimality.")
+                self.logger.debug(
+                    "New incumbent solution found. Attempting to prune via optimality."
+                )
                 self.PruneViaOptimality(tree)
 
-        if (tree.incumbentObj is None) and(term is not TerminationCondition.UNBOUNDED) and (len(tree.ActiveNodes) == 0):
-            self.logger.debug("The problem terminated naturally with no feasible solution.")
+        if (
+            (tree.incumbentObj is None)
+            and (term is not TerminationCondition.UNBOUNDED)
+            and (len(tree.ActiveNodes) == 0)
+        ):
+            self.logger.debug(
+                "The problem terminated naturally with no feasible solution."
+            )
             self.logger.info("The problem was proven to be infeasible.")
             term = TerminationCondition.INFEASIBLE
+            tree.incumbentObj = np.infty
 
         self.logger.info("Optimization complete.")
         if term == TerminationCondition.OPTIMAL:
             self.logger.info("Optimal solution found.")
 
-        
-
         if tree.incumbentNode is not None:
-            result =  MILPSolverResult(
+            result = MILPSolverResult(
                 solution=tree.incumbentNode.primalSolution.solution,
                 obj=tree.incumbentObj,
                 relaxObj=tree.bestBoundObj,
                 terminationCondition=term,
                 numNodesExplored=tree.numTotalNodes,
-                solveTime=toc-tic
+                solveTime=toc - tic,
             )
         else:
-            result =  MILPSolverResult(
+            result = MILPSolverResult(
                 solution=None,
                 obj=tree.incumbentObj,
                 relaxObj=tree.bestBoundObj,
                 terminationCondition=term,
                 numNodesExplored=tree.numTotalNodes,
-                solveTime=toc-tic
+                solveTime=toc - tic,
             )
-        
+
         if returnTree:
             return result, tree
         else:
@@ -687,7 +873,7 @@ class BranchAndCut(MILPSolver):
 
 
 class BranchOnBestBound_MostFractional(BranchAndCut):
-    def DetermineAction(self, tree:BranchAndCut.Tree):
+    def DetermineAction(self, tree: BranchAndCut.Tree):
         """
         This function always selects to branch from the node with the best (most optimistic) node and on the integral variable that currently has the most fractional value.
         """
@@ -701,8 +887,9 @@ class BranchOnBestBound_MostFractional(BranchAndCut):
 
         branchVarIndex = tree.integerVars[furthestIndex]
 
-        return self.Branch, (bestboundLLNode,branchVarIndex), {}
+        return self.Branch, (bestboundLLNode, branchVarIndex), {}
 
-#TODO: Strong branching
-#TODO: Cut generation
-#TODO: Heuristic solution
+
+# TODO: Strong branching
+# TODO: Cut generation
+# TODO: Heuristic solution

@@ -4,7 +4,6 @@ from LP import LP
 from LP_Transformer import BasicTransformer
 
 import numpy as np
-from scipy.sparse import csr_matrix
 from scipy.optimize import linprog as scipy_lp
 
 
@@ -17,29 +16,19 @@ def GenerateRandomLP(numVar, numConstr, lb=-10, ub=10):
 
     b = A @ xFeas
 
-    lp = LP(c, csr_matrix(A), b, lb=np.ones(numVar) * lb, ub=np.ones(numVar) * ub)
+    lp = LP(c, A, b, lb=np.ones(numVar) * lb, ub=np.ones(numVar) * ub)
     trans = BasicTransformer(lp)
 
     transLP = trans.Transform()
     return transLP
 
-<<<<<<< Updated upstream
-def SolveLPWithScipy(lp:LP):
-    numConstr,numVar = lp.A_eq.shape
-    
-    result = scipy_lp(lp.c,A_eq=lp.A_eq,b_eq=lp.b_eq,bounds=(0,None))
 
-    return result.x
-=======
-
-def SolveLPWithCvxpy(lp: LP):
+def SolveLPWithScipy(lp: LP):
     numConstr, numVar = lp.A_eq.shape
 
-    x = cp.Variable(numVar)
-    prob = cp.Problem(cp.Minimize(lp.c @ x), [lp.A_eq @ x == lp.b_eq, x >= 0])
-    prob.solve()
-    return x.value
->>>>>>> Stashed changes
+    result = scipy_lp(lp.c, A_eq=lp.A_eq, b_eq=lp.b_eq, bounds=(0, None))
+
+    return result.x
 
 
 def SolveWithMySolver(lp, B=None):
@@ -88,7 +77,7 @@ def test_0():
     A_eq = np.array([[1, 1], [2, 0]])
     b_eq = np.array([4, 6])
 
-    lp = LP(c=c, A_eq=csr_matrix(A_eq), b_eq=b_eq, lb=np.zeros(2))
+    lp = LP(c=c, A_eq=A_eq, b_eq=b_eq, lb=np.zeros(2))
     assertCorrect(lp)
 
 
@@ -110,7 +99,7 @@ def test_1():
 
     c = np.array([1, 1, -1, 0, 0, 0, 0, 0, 0, 0]).transpose()
 
-    lp = LP(c=c, A_eq=csr_matrix(A), b_eq=b, lb=np.zeros(len(c)))
+    lp = LP(c=c, A_eq=A, b_eq=b, lb=np.zeros(len(c)))
     assertCorrect(lp)
 
 
@@ -135,7 +124,7 @@ def test_random10():
 def test_Infeasible():
     lp = LP(
         c=np.array([1, 0]),
-        A_leq=csr_matrix(np.array([[-1, 1], [1, -1]])),
+        A_leq=np.array([[-1, 1], [1, -1]]),
         b_leq=np.array([0, -1]),
     )
     trans = BasicTransformer(lp)
@@ -150,7 +139,7 @@ def test_Infeasible():
 def test_Unbounded():
     lp = LP(
         c=np.array([1, 0]),
-        A_leq=csr_matrix(np.array([[1, -1], [-1, 1]])),
+        A_leq=np.array([[1, -1], [-1, 1]]),
         b_leq=np.array([0, 1]),
     )
     trans = BasicTransformer(lp)
@@ -164,7 +153,7 @@ def test_Unbounded():
 
 def test_ItrLimit():
     np.random.seed(1)
-    lp = GenerateRandomLP(1000, 1000)
+    lp = GenerateRandomLP(100, 100)
     solver = SimplexSolver()
     result = solver.Solve(lp, itrLimit=100)
     assert result.terminationCondition == TerminationCondition.ITR_LIMIT
@@ -172,11 +161,10 @@ def test_ItrLimit():
 
 def test_TimeLimit():
     np.random.seed(1)
-    lp = GenerateRandomLP(1000, 1000)
+    lp = GenerateRandomLP(100, 100)
     solver = SimplexSolver()
     result = solver.Solve(lp, timeLimit=10)
     assert result.terminationCondition == TerminationCondition.TIME_LIMIT
-
 
 
 if __name__ == "__main__":

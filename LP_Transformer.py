@@ -1,10 +1,9 @@
-from abc import ABC,abstractmethod
+from abc import ABC, abstractmethod
 
 from LP import LP
 
-from scipy.sparse import csr_matrix, vstack, hstack, identity
-from scipy.sparse.linalg import svds
 import numpy as np
+
 
 class LP_Transformer:
     """
@@ -27,14 +26,15 @@ class LP_Transformer:
 
     Attributes:
         originalLP (LP): The original linear program to be transformed.
-        
+
     Note:
         Subclasses must implement Transform() and UnTransform() methods.
     """
-    def __init__(self,lp:LP):
+
+    def __init__(self, lp: LP):
         """
         Initialize the transformer with a linear program.
-        
+
         Args:
             lp (LP): The linear program to be transformed.
         """
@@ -44,66 +44,67 @@ class LP_Transformer:
     def Transform(self):
         """
         Transform the linear program to standard form.
-        
+
         This method must be implemented by subclasses to convert the original
         LP to standard form suitable for simplex algorithms.
-        
+
         Returns:
             LP: The transformed linear program in standard form.
         """
         pass
 
     @abstractmethod
-    def UnTransform(self,x):
+    def UnTransform(self, x):
         """
         Convert solution from transformed space back to original space.
-        
+
         Takes a solution to the transformed LP and returns the corresponding
         solution to the original LP.
-        
+
         Args:
             x (np.array): Solution vector from the transformed LP.
-            
+
         Returns:
             np.array: Solution vector for the original LP.
         """
         pass
 
-    def IsStandardForm(self,lp:LP):
+    def IsStandardForm(self, lp: LP):
         """
         Determine whether a linear program is in standard form.
-        
+
         Standard form requires:
         - No inequality constraints (A_leq x <= b_leq)
         - No upper bounds on variables
         - All lower bounds should be zero (non-negativity)
-        
+
         Args:
             lp (LP): The linear program to check.
-            
+
         Returns:
             bool: True if the LP is in standard form, False otherwise.
         """
         numLeq = len(lp.b_leq)
         if numLeq != 0:
             return False
-        
+
         noUB = np.all(np.isnan(lp.ub))
         if not noUB:
             return False
-        
-        allZeroLB = np.allclose(lp.lb,np.zeros(len(lp.lb)))
+
+        allZeroLB = np.allclose(lp.lb, np.zeros(len(lp.lb)))
         if not allZeroLB:
             return False
-        
+
         return True
+
 
 class BasicTransformer(LP_Transformer):
     """
     This transformer works by reading the inputted LP as is and accomplishing the transformation by taking advantage of the fact that any inequality
 
         a x <= b
-    
+
     Can be transformed into the appropriate form by introducing a slack variable.
 
         a x + s == b
@@ -136,51 +137,80 @@ class BasicTransformer(LP_Transformer):
 
     Where I' is the identity matrix with rows removed that have their "1" value in a column that represents a variable that does not have a lower bound. Likewise, I'' is the identity matrix with rows removed that have their "1" value in a column that represents a variable that does not have an upper bound.
     """
+
     def Transform(self):
         originalNumVar = self.originalLP.A_eq.shape[1]
 
-        #The first step is to determine the number of slack variables needed.
+        # The first step is to determine the number of slack variables needed.
         #   Since this transformer it aimed at being as simple as possible, no simplifications to the inputted LP will be made.
         #   This the number of slack variables needed is equal to the total number of inequalities.
-        numSlack = self.originalLP.A_leq.shape[0] + np.count_nonzero(~np.isnan(self.originalLP.lb)) + np.count_nonzero(~np.isnan(self.originalLP.ub))
+        numSlack = (
+            self.originalLP.A_leq.shape[0]
+            + np.count_nonzero(~np.isnan(self.originalLP.lb))
+            + np.count_nonzero(~np.isnan(self.originalLP.ub))
+        )
 
-        #Next up we need to assemble I' and I''
+        # Next up we need to assemble I' and I''
         varsWithLowerBound = ~np.isnan(self.originalLP.lb)
         varsWithUpperBound = ~np.isnan(self.originalLP.ub)
 
-
-        varsWithLowerBound = np.argwhere(varsWithLowerBound).flatten() if sum(varsWithLowerBound) > 0 else np.array([],dtype=int)
-        varsWithUpperBound = np.argwhere(varsWithUpperBound).flatten() if sum(varsWithUpperBound) > 0 else np.array([],dtype=int)
+        varsWithLowerBound = (
+            np.argwhere(varsWithLowerBound).flatten()
+            if sum(varsWithLowerBound) > 0
+            else np.array([], dtype=int)
+        )
+        varsWithUpperBound = (
+            np.argwhere(varsWithUpperBound).flatten()
+            if sum(varsWithUpperBound) > 0
+            else np.array([], dtype=int)
+        )
 
         nVarLB = len(varsWithLowerBound)
         nVarUB = len(varsWithUpperBound)
 
-        Ip = csr_matrix((np.ones(nVarLB),(np.arange(nVarLB,dtype=int),varsWithLowerBound)),(nVarLB,originalNumVar))
-        Ipp = csr_matrix((np.ones(nVarUB),(np.arange(nVarUB,dtype=int),varsWithUpperBound)),(nVarUB,originalNumVar))
+        Ip = np.zeros((nVarLB, originalNumVar))
+        Ip[np.arange(nVarLB), varsWithLowerBound] = 1
 
-        #Now it's easiest to assemble the A matrix vertically:
-        verticalGroup1 = vstack([self.originalLP.A_eq,self.originalLP.A_leq,-Ip,Ipp])
-        verticalGroup2 = vstack([-self.originalLP.A_eq,-self.originalLP.A_leq,Ip,-Ipp])
-        verticalGroup3 = vstack([csr_matrix((self.originalLP.A_eq.shape[0],numSlack)),identity(numSlack)])
+        Ipp = np.zeros((nVarUB, originalNumVar))
+        Ipp[np.arange(nVarUB), varsWithUpperBound] = 1
 
-        newA = hstack([verticalGroup1,verticalGroup2,verticalGroup3]).tocsr()
+        # Now it's easiest to assemble the A matrix vertically:
+        verticalGroup1 = np.vstack(
+            [self.originalLP.A_eq, self.originalLP.A_leq, -Ip, Ipp]
+        )
+        verticalGroup2 = np.vstack(
+            [-self.originalLP.A_eq, -self.originalLP.A_leq, Ip, -Ipp]
+        )
+        verticalGroup3 = np.vstack(
+            [np.zeros((self.originalLP.A_eq.shape[0], numSlack)), np.identity(numSlack)]
+        )
 
-        #The overall b vector can also be assembled:
-        newb = np.hstack([self.originalLP.b_eq,self.originalLP.b_leq,-self.originalLP.lb[varsWithLowerBound],self.originalLP.ub[varsWithUpperBound]])
+        newA = np.hstack([verticalGroup1, verticalGroup2, verticalGroup3])
 
-        #Finally, we need to transform the objective:
-        newc = np.hstack([self.originalLP.c,-self.originalLP.c,np.zeros(numSlack)])
+        # The overall b vector can also be assembled:
+        newb = np.hstack(
+            [
+                self.originalLP.b_eq,
+                self.originalLP.b_leq,
+                -self.originalLP.lb[varsWithLowerBound],
+                self.originalLP.ub[varsWithUpperBound],
+            ]
+        )
 
-        self.transformedLP = LP(newc,newA,newb,lb=np.zeros(newA.shape[1]))
+        # Finally, we need to transform the objective:
+        newc = np.hstack([self.originalLP.c, -self.originalLP.c, np.zeros(numSlack)])
+
+        self.transformedLP = LP(newc, newA, newb, lb=np.zeros(newA.shape[1]))
         return self.transformedLP
-    
+
     def UnTransform(self, x):
-        #Recall that the inputted "x" here contains the positive and negative components of the original solution followed by slack variables.
-        #Thus, the original solution will be the positive component minus the negative component
+        # Recall that the inputted "x" here contains the positive and negative components of the original solution followed by slack variables.
+        # Thus, the original solution will be the positive component minus the negative component
         originalNumVar = len(self.originalLP.c)
 
         #      Positive Comp.     - Negative Comp.
-        return x[:originalNumVar] - x[originalNumVar:2*originalNumVar]
+        return x[:originalNumVar] - x[originalNumVar : 2 * originalNumVar]
+
 
 class BoundShiftingTransformer(LP_Transformer):
     """
@@ -196,7 +226,9 @@ class BoundShiftingTransformer(LP_Transformer):
 
     Which naturally aligns with the x >= 0 constraint required by standard form. All references to x can simply be replaced by x' and no components for that variable must be added. Thus, if bounds are defined for most variables, this transformer could dramatically reduce the amount of variables to consider.
     """
+
     pass
+
 
 class SimplifyingTransformer(LP_Transformer):
     """
@@ -242,7 +274,9 @@ class SimplifyingTransformer(LP_Transformer):
 
     Where c' = V^T c, A' = U S, THIS MIGHT NOT WORK.
     """
+
     pass
+
 
 class RepetitiveEqualityTransformer(LP_Transformer):
     """
@@ -283,37 +317,47 @@ class RepetitiveEqualityTransformer(LP_Transformer):
          └─     ─┘└─ ─┘    └─     ─┘
 
     Where I' and lb' are the identity matrix and lb vector with rows corresponding to "nan" lb values removed. Likewise I'' and ub'' are the identity matrix and ub vector with rows corresponding to "nan" ub values removed.
-    """ 
+    """
+
     def Transform(self):
-        #First, let's define I', lb', I'' and ub''
+        # First, let's define I', lb', I'' and ub''
         lbNonNanIndices = np.where(~np.isnan(self.originalLP.lb))[0]
         ubNonNanIndices = np.where(~np.isnan(self.originalLP.ub))[0]
 
         lbp = self.originalLP.lb[lbNonNanIndices]
         ubpp = self.originalLP.ub[ubNonNanIndices]
 
-        Ip = csr_matrix((np.ones(len(lbNonNanIndices)), (np.arange(len(lbNonNanIndices)),lbNonNanIndices)),shape=(len(lbNonNanIndices),len(self.originalLP.c)))
+        Ip = np.zeros((len(lbNonNanIndices), len(self.originalLP.c)))
+        Ip[np.arange(len(lbNonNanIndices)), lbNonNanIndices] = 1
 
-        Ipp = csr_matrix((np.ones(len(ubNonNanIndices)), (np.arange(len(ubNonNanIndices)),ubNonNanIndices)),shape=(len(ubNonNanIndices),len(self.originalLP.c)))
+        Ipp = np.zeros((len(ubNonNanIndices), len(self.originalLP.c)))
+        Ipp[np.arange(len(ubNonNanIndices)), ubNonNanIndices] = 1
 
-        #Now lets assemble the new A_leq and b_leq components
-        A_leq = vstack([
-            self.originalLP.A_leq,
-            self.originalLP.A_eq,
-            -self.originalLP.A_eq,
-            Ip,
-            -Ipp
-        ])
-        b_leq = np.hstack([self.originalLP.b_leq,self.originalLP.b_eq,-self.originalLP.b_eq,lbp,-ubpp])
+        # Now lets assemble the new A_leq and b_leq components
+        A_leq = np.vstack(
+            [
+                self.originalLP.A_leq,
+                self.originalLP.A_eq,
+                -self.originalLP.A_eq,
+                Ip,
+                -Ipp,
+            ]
+        )
+        b_leq = np.hstack(
+            [
+                self.originalLP.b_leq,
+                self.originalLP.b_eq,
+                -self.originalLP.b_eq,
+                lbp,
+                -ubpp,
+            ]
+        )
 
-        self.transformedLP = LP(c=self.originalLP.c,A_leq=A_leq,b_leq=b_leq)
+        self.transformedLP = LP(c=self.originalLP.c, A_leq=A_leq, b_leq=b_leq)
         return self.transformedLP
-    
+
     def UnTransform(self, x):
         """
         Since no transformations are done to the space of x variables. The transformation for this transformer will be simply "x".
         """
         return x
-
-
-
